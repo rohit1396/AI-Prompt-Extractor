@@ -48,7 +48,7 @@ function Spinner() {
   )
 }
 
-export function UploadCard() {
+export function UploadCard({ onProceed }: { onProceed: (file: File) => void }) {
   const inputId = useId()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const timerRef = useRef<number | null>(null)
@@ -145,7 +145,7 @@ export function UploadCard() {
             aria-live="polite"
             className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
           >
-            Image uploaded successfully. The OCR functionality will be implemented later.
+            Image uploaded successfully. You can proceed to prompt extraction.
           </div>
         ) : null}
 
@@ -164,9 +164,7 @@ export function UploadCard() {
           className={[
             'rounded-[1.75rem] border border-dashed p-5 text-center transition duration-200 sm:p-8',
             state === 'uploading' ? 'cursor-not-allowed bg-slate-50 opacity-95' : 'cursor-pointer bg-slate-50/80',
-            isDragActive
-              ? 'border-blue-400 bg-blue-50 shadow-[0_0_0_4px_rgba(59,130,246,0.08)]'
-              : 'border-slate-200',
+            isDragActive ? 'border-blue-400 bg-blue-50 shadow-[0_0_0_4px_rgba(59,130,246,0.08)]' : 'border-slate-200',
           ].join(' ')}
           role="button"
           tabIndex={0}
@@ -283,7 +281,7 @@ export function UploadCard() {
                 />
               </div>
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                Image uploaded successfully. The OCR functionality will be implemented later.
+                Image uploaded successfully. You can proceed to prompt extraction.
               </div>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
@@ -301,10 +299,10 @@ export function UploadCard() {
                   className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   onClick={(event) => {
                     event.stopPropagation()
-                    startUpload()
+                    onProceed(selected.file)
                   }}
                 >
-                  Upload again
+                  Proceed to Extract Prompt
                 </button>
               </div>
             </div>
