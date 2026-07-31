@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-} from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'react'
 
 type UploadState = 'empty' | 'selected' | 'uploading' | 'success'
 
@@ -21,19 +13,6 @@ function formatFileSize(bytes: number) {
   if (kb < 1024) return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`
   const mb = kb / 1024
   return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`
-}
-
-function NavIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
-      <path
-        d="M7 7.5C7 6.12 8.12 5 9.5 5h5C15.88 5 17 6.12 17 7.5v5c0 1.38-1.12 2.5-2.5 2.5h-5C8.12 15 7 13.88 7 12.5v-5Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path d="M9 18h6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  )
 }
 
 function UploadGlyph() {
@@ -69,83 +48,7 @@ function Spinner() {
   )
 }
 
-function StepCard({
-  number,
-  title,
-  description,
-}: {
-  number: string
-  title: string
-  description: string
-}) {
-  return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <div className="text-xs font-medium tracking-[0.24em] text-slate-400">{number}</div>
-      <h3 className="mt-8 text-base font-medium text-slate-900">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-    </article>
-  )
-}
-
-function Badge({ children }: { children: string }) {
-  return (
-    <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-      {children}
-    </span>
-  )
-}
-
-function Navbar() {
-  return (
-    <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
-            <NavIcon className="h-5 w-5" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-[15px] font-semibold text-slate-950">PromptLens</div>
-            <div className="text-xs text-slate-500">Screenshot prompt extraction</div>
-          </div>
-        </div>
-
-        <nav className="flex items-center gap-2 text-sm">
-          <a
-            href="#extract"
-            className="rounded-full bg-blue-50 px-4 py-2 font-medium text-blue-700 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-          >
-            Extract
-          </a>
-          <span
-            aria-disabled="true"
-            className="rounded-full px-4 py-2 font-medium text-slate-400"
-          >
-            History
-          </span>
-        </nav>
-      </div>
-    </header>
-  )
-}
-
-function HeroSection() {
-  return (
-    <section className="mx-auto max-w-3xl px-4 pt-12 text-center sm:px-6 lg:pt-14">
-      <div className="flex justify-center">
-        <Badge>Powered by PaddleOCR</Badge>
-      </div>
-      <h1 className="mt-5 text-balance text-4xl font-semibold tracking-[-0.05em] text-slate-950 sm:text-5xl lg:text-6xl">
-        Extract AI prompts from screenshots
-      </h1>
-      <p className="mx-auto mt-4 max-w-2xl text-pretty text-base leading-7 text-slate-600 sm:text-lg">
-        Upload screenshots from Instagram, Midjourney, ChatGPT, X, Reddit or anywhere else.
-        PromptLens automatically extracts and cleans AI prompts.
-      </p>
-    </section>
-  )
-}
-
-function UploadCard() {
+export function UploadCard() {
   const inputId = useId()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const timerRef = useRef<number | null>(null)
@@ -187,19 +90,22 @@ function UploadCard() {
       timerRef.current = window.setTimeout(() => {
         setSuccessVisible(false)
       }, 3000)
-      }, 1600)
+    }, 1600)
   }, [clearTimer, selected, state])
 
-  const handleFile = useCallback((file: File | null) => {
-    if (!file) return
-    if (selected) {
-      URL.revokeObjectURL(selected.previewUrl)
-    }
-    const previewUrl = URL.createObjectURL(file)
-    setSelected({ file, previewUrl })
-    setSuccessVisible(false)
-    setState('selected')
-  }, [selected])
+  const handleFile = useCallback(
+    (file: File | null) => {
+      if (!file) return
+      if (selected) {
+        URL.revokeObjectURL(selected.previewUrl)
+      }
+      const previewUrl = URL.createObjectURL(file)
+      setSelected({ file, previewUrl })
+      setSuccessVisible(false)
+      setState('selected')
+    },
+    [selected],
+  )
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     handleFile(event.target.files?.[0] ?? null)
@@ -258,7 +164,9 @@ function UploadCard() {
           className={[
             'rounded-[1.75rem] border border-dashed p-5 text-center transition duration-200 sm:p-8',
             state === 'uploading' ? 'cursor-not-allowed bg-slate-50 opacity-95' : 'cursor-pointer bg-slate-50/80',
-            isDragActive ? 'border-blue-400 bg-blue-50 shadow-[0_0_0_4px_rgba(59,130,246,0.08)]' : 'border-slate-200',
+            isDragActive
+              ? 'border-blue-400 bg-blue-50 shadow-[0_0_0_4px_rgba(59,130,246,0.08)]'
+              : 'border-slate-200',
           ].join(' ')}
           role="button"
           tabIndex={0}
@@ -415,45 +323,5 @@ function UploadCard() {
         onChange={handleInputChange}
       />
     </section>
-  )
-}
-
-function HowItWorks() {
-  return (
-    <section className="mx-auto max-w-6xl px-4 pb-14 sm:px-6 lg:px-8">
-      <div className="mb-5">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-          How PromptLens Works
-        </h2>
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <StepCard
-          number="01"
-          title="Upload Screenshot"
-          description="Upload any screenshot containing an AI prompt."
-        />
-        <StepCard
-          number="02"
-          title="OCR Extraction"
-          description="PromptLens extracts the text using PaddleOCR."
-        />
-        <StepCard
-          number="03"
-          title="Copy Prompt"
-          description="Review and copy the cleaned prompt."
-        />
-      </div>
-    </section>
-  )
-}
-
-export function HomePage() {
-  return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#f8fbff_0%,_#ffffff_38%,_#f8fafc_100%)] text-slate-700">
-      <Navbar />
-      <HeroSection />
-      <UploadCard />
-      <HowItWorks />
-    </main>
   )
 }
