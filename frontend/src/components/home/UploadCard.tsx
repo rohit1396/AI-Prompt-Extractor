@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import type { DummyUploadResponse } from '../../api/extractions'
 
-type UploadState = 'empty' | 'selected' | 'uploading' | 'success'
+type UploadState = 'empty' | 'selected' | 'uploading' | 'success' | 'error'
 
 type SelectedFile = {
   file: File
@@ -48,7 +49,11 @@ function Spinner() {
   )
 }
 
-export function UploadCard({ onProceed }: { onProceed: (file: File) => void }) {
+export function UploadCard({
+  onProceed,
+}: {
+  onProceed: (file: File) => Promise<DummyUploadResponse>
+}) {
   const inputId = useId()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const timerRef = useRef<number | null>(null)
@@ -56,6 +61,7 @@ export function UploadCard({ onProceed }: { onProceed: (file: File) => void }) {
   const [isDragActive, setIsDragActive] = useState(false)
   const [selected, setSelected] = useState<SelectedFile | null>(null)
   const [successVisible, setSuccessVisible] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const supportedFormats = useMemo(() => ['PNG', 'JPG', 'JPEG', 'WEBP'], [])
 
@@ -73,25 +79,12 @@ export function UploadCard({ onProceed }: { onProceed: (file: File) => void }) {
     }
     setSelected(null)
     setSuccessVisible(false)
+    setErrorMessage(null)
     setState('empty')
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }, [clearTimer, selected])
-
-  const startUpload = useCallback(() => {
-    if (!selected || state === 'uploading') return
-    setSuccessVisible(false)
-    setState('uploading')
-    clearTimer()
-    timerRef.current = window.setTimeout(() => {
-      setState('success')
-      setSuccessVisible(true)
-      timerRef.current = window.setTimeout(() => {
-        setSuccessVisible(false)
-      }, 3000)
-    }, 1600)
-  }, [clearTimer, selected, state])
 
   const handleFile = useCallback(
     (file: File | null) => {
@@ -102,10 +95,33 @@ export function UploadCard({ onProceed }: { onProceed: (file: File) => void }) {
       const previewUrl = URL.createObjectURL(file)
       setSelected({ file, previewUrl })
       setSuccessVisible(false)
+      setErrorMessage(null)
       setState('selected')
     },
     [selected],
   )
+
+  const handleProceed = useCallback(async () => {
+    if (!selected || state === 'uploading') return
+
+    setState('uploading')
+    setSuccessVisible(false)
+    setErrorMessage(null)
+    clearTimer()
+
+    try {
+      await onProceed(selected.file)
+      setState('success')
+      setSuccessVisible(true)
+      clearTimer()
+      timerRef.current = window.setTimeout(() => {
+        setSuccessVisible(false)
+      }, 3000)
+    } catch (error) {
+      setState('error')
+      setErrorMessage(error instanceof Error ? error.message : 'Upload failed. Please try again.')
+    }
+  }, [clearTimer, onProceed, selected, state])
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     handleFile(event.target.files?.[0] ?? null)
@@ -146,6 +162,15 @@ export function UploadCard({ onProceed }: { onProceed: (file: File) => void }) {
             className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
           >
             Image uploaded successfully. You can proceed to prompt extraction.
+          </div>
+        ) : null}
+
+        {errorMessage ? (
+          <div
+            role="alert"
+            className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+          >
+            {errorMessage}
           </div>
         ) : null}
 
@@ -252,7 +277,7 @@ export function UploadCard({ onProceed }: { onProceed: (file: File) => void }) {
                       className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                       onClick={(event) => {
                         event.stopPropagation()
-                        startUpload()
+                        void handleProceed()
                       }}
                     >
                       Upload screenshot
@@ -299,7 +324,7 @@ export function UploadCard({ onProceed }: { onProceed: (file: File) => void }) {
                   className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   onClick={(event) => {
                     event.stopPropagation()
-                    onProceed(selected.file)
+                    void handleProceed()
                   }}
                 >
                   Proceed to Extract Prompt

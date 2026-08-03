@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import type { DummyUploadResponse } from '../api/extractions'
 import { Navbar } from '../components/home/Navbar'
 
 type StepState = 'waiting' | 'running' | 'done'
@@ -78,9 +79,11 @@ function StepRow({ step }: { step: ProcessingStep }) {
 
 export function ImageProcessingPage({
   file,
+  uploadResponse,
   onChangeImage,
 }: {
   file: File
+  uploadResponse: DummyUploadResponse
   onChangeImage: () => void
 }) {
   const previewUrl = useMemo(() => URL.createObjectURL(file), [file])
@@ -111,6 +114,9 @@ export function ImageProcessingPage({
                       {formatFileSize(file.size)} · {file.type.split('/')[1]?.toUpperCase() ?? 'IMAGE'} ·
                       Uploaded just now
                     </div>
+                    <div className="mt-2 text-sm text-slate-600">
+                      Backend response: <span className="font-medium text-slate-900">{uploadResponse.status}</span>
+                    </div>
                   </div>
 
                   <button
@@ -129,6 +135,10 @@ export function ImageProcessingPage({
             <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-6 sm:p-7">
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
                 Processing your image
+              </div>
+
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                {uploadResponse.message}
               </div>
 
               <div className="mt-6 space-y-5">
