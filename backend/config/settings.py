@@ -26,7 +26,18 @@ SECRET_KEY = 'django-insecure-h#ud%so6^kjqvcr3z$qw#y-=r5a@4^cy6^efw&3+to=l#5$0od
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+def env_list(name: str, default: str) -> list[str]:
+    return [
+        item.strip()
+        for item in os.environ.get(name, default).split(',')
+        if item.strip()
+    ]
+
+
+ALLOWED_HOSTS = env_list(
+    'ALLOWED_HOSTS',
+    'localhost,127.0.0.1',
+)
 
 
 # Application definition
@@ -125,21 +136,17 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get(
+    *env_list(
         'CORS_ALLOWED_ORIGINS',
         'http://localhost:5173',
-    ).split(',')
-    if origin.strip()
+    ),
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get(
+    *env_list(
         'CSRF_TRUSTED_ORIGINS',
         'http://localhost:5173',
-    ).split(',')
-    if origin.strip()
+    ),
 ]
 
 REST_FRAMEWORK = {
