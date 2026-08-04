@@ -4,9 +4,11 @@ import { Navigate, BrowserRouter, Route, Routes, useLocation, useNavigate } from
 import './index.css'
 import App from './App.tsx'
 import { ImageProcessingPage } from './pages/ImageProcessingPage'
+import type { DummyUploadResponse } from './api/extractions'
 
 type LocationState = {
   file?: File
+  uploadResponse?: DummyUploadResponse
 }
 
 export function ImageProcessingEntry() {
@@ -14,14 +16,16 @@ export function ImageProcessingEntry() {
   const location = useLocation()
   const state = location.state as LocationState | null
   const file = state?.file
+  const uploadResponse = state?.uploadResponse
 
-  if (!file) {
+  if (!file || !uploadResponse) {
     return <Navigate to="/" replace />
   }
 
   return (
     <ImageProcessingPage
       file={file}
+      uploadResponse={uploadResponse}
       onChangeImage={() => {
         navigate('/', { replace: true })
       }}
