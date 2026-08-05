@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import type { DummyUploadResponse } from '../../api/extractions'
+import type { ExtractionResponse } from '../../api/extractions'
 
 type UploadState = 'empty' | 'selected' | 'uploading' | 'success' | 'error'
 
@@ -52,7 +52,7 @@ function Spinner() {
 export function UploadCard({
   onProceed,
 }: {
-  onProceed: (file: File) => Promise<DummyUploadResponse>
+  onProceed: (file: File) => Promise<ExtractionResponse>
 }) {
   const inputId = useId()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -161,7 +161,7 @@ export function UploadCard({
             aria-live="polite"
             className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
           >
-            Image uploaded successfully. You can proceed to prompt extraction.
+            Image uploaded successfully. OCR text has been extracted.
           </div>
         ) : null}
 
@@ -292,7 +292,7 @@ export function UploadCard({
             <div className="mx-auto flex min-h-[360px] max-w-xl flex-col items-center justify-center gap-4">
               <Spinner />
               <div className="text-base font-medium text-slate-950">Uploading...</div>
-              <p className="text-sm text-slate-500">Please keep this tab open while the screenshot is processed.</p>
+              <p className="text-sm text-slate-500">Please keep this tab open while the screenshot is extracted.</p>
             </div>
           ) : null}
 
@@ -306,7 +306,7 @@ export function UploadCard({
                 />
               </div>
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                Image uploaded successfully. You can proceed to prompt extraction.
+                Image uploaded successfully. OCR text has been extracted.
               </div>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <button
@@ -327,7 +327,7 @@ export function UploadCard({
                     void handleProceed()
                   }}
                 >
-                  Proceed to Extract Prompt
+                  View Extracted Text
                 </button>
               </div>
             </div>
