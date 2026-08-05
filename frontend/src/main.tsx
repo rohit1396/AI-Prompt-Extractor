@@ -4,11 +4,11 @@ import { Navigate, BrowserRouter, Route, Routes, useLocation, useNavigate } from
 import './index.css'
 import App from './App.tsx'
 import { ImageProcessingPage } from './pages/ImageProcessingPage'
-import type { DummyUploadResponse } from './api/extractions'
+import type { ExtractionResponse } from './api/extractions'
 
 type LocationState = {
   file?: File
-  uploadResponse?: DummyUploadResponse
+  uploadResponse?: ExtractionResponse
 }
 
 export function ImageProcessingEntry() {
