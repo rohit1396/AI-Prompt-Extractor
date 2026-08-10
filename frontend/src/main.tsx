@@ -1,32 +1,24 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Navigate, BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router'
+import { Navigate, BrowserRouter, Route, Routes, useNavigate } from 'react-router'
 import './index.css'
 import App from './App.tsx'
 import { ImageProcessingPage } from './pages/ImageProcessingPage'
-import type { ExtractionResponse } from './api/extractions'
-
-type LocationState = {
-  file?: File
-  uploadResponse?: ExtractionResponse
-}
+import { ExtractionSessionProvider, useExtractionSession } from './context/ExtractionSessionContext'
 
 export function ImageProcessingEntry() {
   const navigate = useNavigate()
-  const location = useLocation()
-  const state = location.state as LocationState | null
-  const file = state?.file
-  const uploadResponse = state?.uploadResponse
+  const { session, resetSession } = useExtractionSession()
 
-  if (!file || !uploadResponse) {
+  if (!session) {
     return <Navigate to="/" replace />
   }
 
   return (
     <ImageProcessingPage
-      file={file}
-      uploadResponse={uploadResponse}
+      session={session}
       onChangeImage={() => {
+        resetSession()
         navigate('/', { replace: true })
       }}
     />
@@ -35,11 +27,13 @@ export function ImageProcessingEntry() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<App />} />
-        <Route path="/imageprocessing" element={<ImageProcessingEntry />} />
-      </Routes>
-    </BrowserRouter>
+    <ExtractionSessionProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<App />} />
+          <Route path="/imageprocessing" element={<ImageProcessingEntry />} />
+        </Routes>
+      </BrowserRouter>
+    </ExtractionSessionProvider>
   </StrictMode>,
 )

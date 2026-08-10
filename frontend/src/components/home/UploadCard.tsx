@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import type { ExtractionResponse } from '../../api/extractions'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useNavigate } from 'react-router'
+import { useExtractionSession } from '../../context/ExtractionSessionContext'
 
-type UploadState = 'empty' | 'selected' | 'uploading' | 'success' | 'error'
+type UploadState = 'empty' | 'selected' | 'submitting' | 'error'
 
 type SelectedFile = {
   file: File
@@ -37,54 +38,46 @@ function UploadGlyph() {
 
 function Spinner() {
   return (
-    <svg
-      className="h-5 w-5 animate-spin text-blue-600"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg className="h-5 w-5 animate-spin text-blue-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   )
 }
 
-export function UploadCard({
-  onProceed,
-}: {
-  onProceed: (file: File) => Promise<ExtractionResponse>
-}) {
+export function UploadCard() {
   const inputId = useId()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const timerRef = useRef<number | null>(null)
+  const submitTimerRef = useRef<number | null>(null)
+  const navigate = useNavigate()
+  const { startExtraction, resetSession } = useExtractionSession()
   const [state, setState] = useState<UploadState>('empty')
   const [isDragActive, setIsDragActive] = useState(false)
   const [selected, setSelected] = useState<SelectedFile | null>(null)
-  const [successVisible, setSuccessVisible] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const supportedFormats = useMemo(() => ['PNG', 'JPG', 'JPEG', 'WEBP'], [])
 
-  const clearTimer = useCallback(() => {
-    if (timerRef.current) {
-      window.clearTimeout(timerRef.current)
-      timerRef.current = null
+  const clearSubmitTimer = useCallback(() => {
+    if (submitTimerRef.current) {
+      window.clearTimeout(submitTimerRef.current)
+      submitTimerRef.current = null
     }
   }, [])
 
   const resetSelection = useCallback(() => {
-    clearTimer()
+    clearSubmitTimer()
+    resetSession()
     if (selected) {
       URL.revokeObjectURL(selected.previewUrl)
     }
     setSelected(null)
-    setSuccessVisible(false)
     setErrorMessage(null)
     setState('empty')
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
-  }, [clearTimer, selected])
+  }, [clearSubmitTimer, resetSession, selected])
 
   const handleFile = useCallback(
     (file: File | null) => {
@@ -94,34 +87,31 @@ export function UploadCard({
       }
       const previewUrl = URL.createObjectURL(file)
       setSelected({ file, previewUrl })
-      setSuccessVisible(false)
       setErrorMessage(null)
       setState('selected')
     },
     [selected],
   )
 
-  const handleProceed = useCallback(async () => {
-    if (!selected || state === 'uploading') return
+  const handleProceed = useCallback(() => {
+    if (!selected || state === 'submitting') return
 
-    setState('uploading')
-    setSuccessVisible(false)
+    setState('submitting')
     setErrorMessage(null)
-    clearTimer()
+    clearSubmitTimer()
+    submitTimerRef.current = window.setTimeout(() => {
+      startExtraction(selected.file)
+      navigate('/imageprocessing')
+    }, 250)
+  }, [clearSubmitTimer, navigate, selected, startExtraction, state])
 
-    try {
-      await onProceed(selected.file)
-      setState('success')
-      setSuccessVisible(true)
-      clearTimer()
-      timerRef.current = window.setTimeout(() => {
-        setSuccessVisible(false)
-      }, 3000)
-    } catch (error) {
-      setState('error')
-      setErrorMessage(error instanceof Error ? error.message : 'Upload failed. Please try again.')
-    }
-  }, [clearTimer, onProceed, selected, state])
+  const handleSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      handleProceed()
+    },
+    [handleProceed],
+  )
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     handleFile(event.target.files?.[0] ?? null)
@@ -140,199 +130,150 @@ export function UploadCard({
     window.addEventListener('paste', onPaste)
     return () => {
       window.removeEventListener('paste', onPaste)
-      clearTimer()
+      clearSubmitTimer()
     }
-  }, [clearTimer, handleFile])
+  }, [clearSubmitTimer, handleFile])
 
   useEffect(() => {
     return () => {
+      clearSubmitTimer()
       if (selected) {
         URL.revokeObjectURL(selected.previewUrl)
       }
     }
-  }, [selected])
+  }, [clearSubmitTimer, selected])
 
   return (
     <section id="extract" className="mx-auto max-w-5xl px-4 pb-8 pt-10 sm:px-6 lg:pb-12">
       <div className="rounded-[2rem] border border-slate-200 bg-white/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:p-6">
-        {successVisible ? (
-          <div
-            role="status"
-            aria-live="polite"
-            className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-          >
-            Image uploaded successfully. OCR text has been extracted.
-          </div>
-        ) : null}
-
         {errorMessage ? (
-          <div
-            role="alert"
-            className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
-          >
+          <div role="alert" className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
             {errorMessage}
           </div>
         ) : null}
 
-        <div
+        <form
           onDragOver={(event) => {
             event.preventDefault()
-            if (state !== 'uploading') setIsDragActive(true)
+            if (state !== 'submitting') setIsDragActive(true)
           }}
           onDragLeave={() => setIsDragActive(false)}
           onDrop={(event) => {
             event.preventDefault()
             setIsDragActive(false)
-            if (state === 'uploading') return
+            if (state === 'submitting') return
             handleFile(event.dataTransfer.files?.[0] ?? null)
           }}
           className={[
             'rounded-[1.75rem] border border-dashed p-5 text-center transition duration-200 sm:p-8',
-            state === 'uploading' ? 'cursor-not-allowed bg-slate-50 opacity-95' : 'cursor-pointer bg-slate-50/80',
+            state === 'submitting' ? 'cursor-not-allowed bg-slate-50 opacity-95' : 'cursor-pointer bg-slate-50/80',
             isDragActive ? 'border-blue-400 bg-blue-50 shadow-[0_0_0_4px_rgba(59,130,246,0.08)]' : 'border-slate-200',
           ].join(' ')}
-          role="button"
-          tabIndex={0}
           aria-label="Upload screenshot"
-          aria-disabled={state === 'uploading'}
-          onKeyDown={(event) => {
-            if (state === 'uploading') return
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              fileInputRef.current?.click()
-            }
-          }}
-          onClick={() => {
-            if (state !== 'uploading') fileInputRef.current?.click()
-          }}
+          aria-busy={state === 'submitting'}
+          onSubmit={handleSubmit}
         >
-          {state === 'empty' ? (
-            <div className="mx-auto flex max-w-xl flex-col items-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 shadow-inner shadow-blue-200/60">
-                <UploadGlyph />
-              </div>
-              <h2 className="mt-5 text-lg font-semibold text-slate-950">Drop your screenshot here</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Drag and drop, or click to browse from your device
-              </p>
+          <button type="submit" className="sr-only" aria-hidden="true" tabIndex={-1}>
+            Submit
+          </button>
 
-              <div className="mt-5 flex flex-col items-center gap-3">
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    fileInputRef.current?.click()
-                  }}
-                >
-                  Browse files
-                  <span className="ml-2 text-sm">↗</span>
-                </button>
-                <div className="text-xs text-slate-500">or paste from clipboard</div>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {supportedFormats.map((item) => (
-                    <span
-                      key={item}
-                      className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-500"
-                    >
-                      {item}
-                    </span>
-                  ))}
-                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-500">
-                    Max 10MB
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {state === 'selected' && selected ? (
-            <div className="mx-auto flex max-w-2xl flex-col items-center gap-5">
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <img
-                  src={selected.previewUrl}
-                  alt={selected.file.name}
-                  className="max-h-[320px] w-full object-contain"
-                />
-              </div>
-              <div className="w-full rounded-2xl bg-white p-4 shadow-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-left">
-                    <div className="text-sm font-medium text-slate-950">{selected.file.name}</div>
-                    <div className="mt-1 text-sm text-slate-500">{formatFileSize(selected.file.size)}</div>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        resetSelection()
-                      }}
-                    >
-                      Remove image
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        void handleProceed()
-                      }}
-                    >
-                      Upload screenshot
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {state === 'uploading' ? (
+          {state === 'submitting' ? (
             <div className="mx-auto flex min-h-[360px] max-w-xl flex-col items-center justify-center gap-4">
               <Spinner />
-              <div className="text-base font-medium text-slate-950">Uploading...</div>
-              <p className="text-sm text-slate-500">Please keep this tab open while the screenshot is extracted.</p>
+              <div className="text-base font-medium text-slate-950">Preparing upload...</div>
+              <p className="text-sm text-slate-500">Handoff to the processing screen is starting.</p>
             </div>
           ) : null}
 
-          {state === 'success' && selected ? (
-            <div className="mx-auto flex max-w-2xl flex-col items-center gap-5">
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <img
-                  src={selected.previewUrl}
-                  alt={selected.file.name}
-                  className="max-h-[320px] w-full object-contain opacity-95"
-                />
-              </div>
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                Image uploaded successfully. OCR text has been extracted.
-              </div>
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
-                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    resetSelection()
-                  }}
-                >
-                  Remove image
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    void handleProceed()
-                  }}
-                >
-                  View Extracted Text
-                </button>
-              </div>
+          {state !== 'submitting' ? (
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Upload screenshot"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  fileInputRef.current?.click()
+                }
+              }}
+              onClick={() => {
+                fileInputRef.current?.click()
+              }}
+            >
+              {state === 'empty' ? (
+                <div className="mx-auto flex max-w-xl flex-col items-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 shadow-inner shadow-blue-200/60">
+                    <UploadGlyph />
+                  </div>
+                  <h2 className="mt-5 text-lg font-semibold text-slate-950">Drop your screenshot here</h2>
+                  <p className="mt-2 text-sm text-slate-600">Drag and drop, or click to browse from your device</p>
+
+                  <div className="mt-5 flex flex-col items-center gap-3">
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        fileInputRef.current?.click()
+                      }}
+                    >
+                      Browse files
+                      <span className="ml-2 text-sm">↗</span>
+                    </button>
+                    <div className="text-xs text-slate-500">or paste from clipboard</div>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {supportedFormats.map((item) => (
+                        <span key={item} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-500">
+                          {item}
+                        </span>
+                      ))}
+                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-500">
+                        Max 10MB
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {state === 'selected' && selected ? (
+                <div className="mx-auto flex max-w-2xl flex-col items-center gap-5">
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <img src={selected.previewUrl} alt={selected.file.name} className="max-h-[320px] w-full object-contain" />
+                  </div>
+                  <div className="w-full rounded-2xl bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="text-left">
+                        <div className="text-sm font-medium text-slate-950">{selected.file.name}</div>
+                        <div className="mt-1 text-sm text-slate-500">{formatFileSize(selected.file.size)}</div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            resetSelection()
+                          }}
+                        >
+                          Remove image
+                        </button>
+                        <button
+                          type="submit"
+                          className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                          }}
+                        >
+                          Upload screenshot
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
-        </div>
+        </form>
 
         <p className="mt-4 text-center text-sm text-slate-500">Press Ctrl+V anywhere on this page to paste a screenshot</p>
       </div>
