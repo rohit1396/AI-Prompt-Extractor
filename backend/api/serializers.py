@@ -17,9 +17,10 @@ class ImageUploadSerializer(serializers.Serializer):
         return value
 
 
-class DummyUploadResponseSerializer(serializers.Serializer):
+class ExtractionResponseSerializer(serializers.Serializer):
     id = serializers.CharField()
     status = serializers.CharField()
     filename = serializers.CharField()
     content_type = serializers.CharField()
+    extracted_text = serializers.CharField()
     message = serializers.CharField()

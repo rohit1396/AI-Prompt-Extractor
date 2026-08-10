@@ -1,22 +1,6 @@
-import { useEffect, useMemo } from 'react'
-import type { DummyUploadResponse } from '../api/extractions'
+import { useMemo } from 'react'
+import type { ExtractionSession } from '../context/ExtractionSessionContext'
 import { Navbar } from '../components/home/Navbar'
-
-type StepState = 'waiting' | 'running' | 'done'
-
-type ProcessingStep = {
-  id: string
-  label: string
-  status: StepState
-}
-
-const STEPS: ProcessingStep[] = [
-  { id: 'storage', label: 'Image uploaded to storage', status: 'done' },
-  { id: 'preprocess', label: 'Image preprocessed', status: 'done' },
-  { id: 'ocr', label: 'Text extracted via OCR', status: 'done' },
-  { id: 'classification', label: 'AI classifying & cleaning prompt', status: 'running' },
-  { id: 'optimization', label: 'Optimizing prompt', status: 'waiting' },
-]
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -26,73 +10,37 @@ function formatFileSize(bytes: number) {
   return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`
 }
 
-function Spinner() {
-  return (
-    <svg
-      className="h-5 w-5 animate-spin text-blue-600"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
-      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function StepStatus({ status }: { status: StepState }) {
+function ChecklistIcon({ status }: { status: ExtractionSession['checklist'][number]['status'] }) {
   if (status === 'done') {
-    return <span className="h-6 w-6 rounded-full bg-emerald-200 ring-8 ring-emerald-100" />
+    return (
+      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+        <span className="text-xs font-semibold">✓</span>
+      </div>
+    )
   }
 
   if (status === 'running') {
     return (
-      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-        <Spinner />
-      </span>
+      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-blue-200 bg-blue-50">
+        <div className="h-3 w-3 animate-pulse rounded-full bg-blue-500" />
+      </div>
     )
   }
 
-  return <span className="h-6 w-6 rounded-full border border-slate-200 bg-white" />
-}
-
-function StepRow({ step }: { step: ProcessingStep }) {
-  return (
-    <div className="flex items-center gap-3 sm:gap-4">
-      <StepStatus status={step.status} />
-      <div className="min-w-0 flex-1 text-sm text-slate-700">{step.label}</div>
-      <div
-        className={[
-          'text-sm font-medium',
-          step.status === 'done'
-            ? 'text-emerald-700'
-            : step.status === 'running'
-              ? 'text-blue-600'
-              : 'text-slate-400',
-        ].join(' ')}
-      >
-        {step.status === 'done' ? 'Done' : step.status === 'running' ? 'Running...' : 'Waiting'}
-      </div>
-    </div>
-  )
+  return <div className="h-6 w-6 rounded-full border border-slate-300 bg-white" />
 }
 
 export function ImageProcessingPage({
-  file,
-  uploadResponse,
+  session,
   onChangeImage,
 }: {
-  file: File
-  uploadResponse: DummyUploadResponse
+  session: ExtractionSession
   onChangeImage: () => void
 }) {
-  const previewUrl = useMemo(() => URL.createObjectURL(file), [file])
+  const previewUrl = useMemo(() => session.previewUrl, [session.previewUrl])
 
-  useEffect(() => {
-    return () => {
-      URL.revokeObjectURL(previewUrl)
-    }
-  }, [previewUrl])
+  const isCompleted = session.status === 'completed' && session.response
+  const extractedText = session.response?.extracted_text.trim()
 
   return (
     <main className="min-h-screen bg-[#fafafa] text-slate-700">
@@ -103,29 +51,37 @@ export function ImageProcessingPage({
           <div className="rounded-[2rem] border border-slate-200 bg-white px-5 py-6 sm:px-6 sm:py-7">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 sm:w-[220px] sm:shrink-0">
-                <img src={previewUrl} alt={file.name} className="h-56 w-full object-contain" />
+                <img src={previewUrl} alt={session.file.name} className="h-56 w-full object-contain" />
               </div>
 
               <div className="min-w-0 flex-1">
                 <div className="flex flex-col gap-4 pt-1 sm:pt-0">
                   <div>
-                    <div className="text-lg font-semibold text-slate-950">{file.name}</div>
+                    <div className="text-lg font-semibold text-slate-950">{session.file.name}</div>
                     <div className="mt-1 text-sm text-slate-500">
-                      {formatFileSize(file.size)} · {file.type.split('/')[1]?.toUpperCase() ?? 'IMAGE'} ·
-                      Uploaded just now
+                      {formatFileSize(session.file.size)} · {session.file.type.split('/')[1]?.toUpperCase() ?? 'IMAGE'} · Uploaded just now
                     </div>
                     <div className="mt-2 text-sm text-slate-600">
-                      Backend response: <span className="font-medium text-slate-900">{uploadResponse.status}</span>
+                      Backend response:{' '}
+                      <span className="font-medium text-slate-900">
+                        {session.status === 'error'
+                          ? 'failed'
+                          : session.status === 'completed'
+                            ? session.response?.status
+                            : 'processing'}
+                      </span>
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    className="inline-flex w-fit items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                    onClick={onChangeImage}
-                  >
-                    Change image
-                  </button>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="inline-flex w-fit items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                      onClick={onChangeImage}
+                    >
+                      Change image
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -134,27 +90,76 @@ export function ImageProcessingPage({
           <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 sm:p-7">
             <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-6 sm:p-7">
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-                Processing your image
+                {isCompleted ? 'Extracted prompt text' : 'Processing your image'}
               </div>
 
-              <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                {uploadResponse.message}
-              </div>
+              {session.status === 'error' ? (
+                <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                  {session.error ?? 'Upload failed. Please try again.'}
+                </div>
+              ) : null}
 
-              <div className="mt-6 space-y-5">
-                {STEPS.map((step) => (
-                  <StepRow key={step.id} step={step} />
-                ))}
-              </div>
+              {isCompleted ? (
+                <>
+                  <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                    {session.response?.message}
+                  </div>
 
-              <div className="mt-7 h-1.5 overflow-hidden rounded-full bg-slate-200">
-                <div className="h-full w-[60%] rounded-full bg-blue-600" />
-              </div>
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-950 px-4 py-4 text-sm leading-6 whitespace-pre-wrap text-slate-100">
+                    {extractedText || 'No readable prompt text was detected in this image.'}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                    Upload complete. OCR and prompt cleanup are still running.
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    {session.checklist.map((item) => (
+                      <div key={item.key} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <ChecklistIcon status={item.status} />
+                          <span className="text-sm text-slate-700">{item.label}</span>
+                        </div>
+                        <span
+                          className={[
+                            'text-sm font-medium',
+                            item.status === 'done'
+                              ? 'text-emerald-600'
+                              : item.status === 'running'
+                                ? 'text-blue-600'
+                                : 'text-slate-400',
+                          ].join(' ')}
+                        >
+                          {item.status === 'done' ? 'Done' : item.status === 'running' ? 'Running...' : 'Waiting'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                      style={{
+                        width:
+                          session.status === 'completed'
+                            ? '100%'
+                            : session.status === 'error'
+                              ? '20%'
+                              : '72%',
+                      }}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        <p className="mt-6 text-center text-sm text-slate-500">This usually takes 5–10 seconds</p>
+        <p className="mt-6 text-center text-sm text-slate-500">
+          {isCompleted ? 'Extraction completed successfully.' : 'This usually takes 5-10 seconds'}
+        </p>
       </section>
     </main>
   )
