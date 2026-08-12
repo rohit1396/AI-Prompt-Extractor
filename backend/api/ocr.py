@@ -2,16 +2,23 @@ from __future__ import annotations
 
 import os
 from tempfile import NamedTemporaryFile
+from typing import Any
 
 from PIL import Image
-from paddleocr import PaddleOCR
 
-_OCR_ENGINE: PaddleOCR | None = None
+_OCR_ENGINE: Any | None = None
 
 
-def _get_ocr_engine() -> PaddleOCR:
+def _get_ocr_engine() -> Any:
     global _OCR_ENGINE
     if _OCR_ENGINE is None:
+        try:
+            from paddleocr import PaddleOCR
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                'PaddleOCR is not installed. Install the backend dependencies before running OCR.'
+            ) from exc
+
         _OCR_ENGINE = PaddleOCR(
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,

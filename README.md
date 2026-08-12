@@ -28,7 +28,7 @@ dataset/
 
 ## Current Sprint
 
-Sprint 0 - Architecture & Project Setup
+Sprint 1 - PostgreSQL persistence foundation
 
 ## Deployment Environment Variables
 
@@ -43,3 +43,7 @@ Production:
 - `ALLOWED_HOSTS=ai-prompt-extractor.onrender.com`
 - `CORS_ALLOWED_ORIGINS=https://ai-prompt-extractor-beta.vercel.app`
 - `CSRF_TRUSTED_ORIGINS=https://ai-prompt-extractor-beta.vercel.app`
+
+Backend database:
+- `DATABASE_URL=postgresql://promptlens:promptlens@localhost:5432/promptlens`
+- or `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
