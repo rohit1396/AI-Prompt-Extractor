@@ -1,3 +1,7 @@
+import os
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
 """
 Django settings for config project.
 
@@ -10,9 +14,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from pathlib import Path
-import os
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -24,7 +25,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-h#ud%so6^kjqvcr3z$qw#y-=r5a@4^cy6^efw&3+to=l#5$0od'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
 
 def env_list(name: str, default: str) -> list[str]:
     return [
@@ -32,6 +40,41 @@ def env_list(name: str, default: str) -> list[str]:
         for item in os.environ.get(name, default).split(',')
         if item.strip()
     ]
+
+
+def database_config() -> dict[str, object]:
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        parsed = urlparse(database_url)
+        scheme = parsed.scheme.lower()
+        if scheme.startswith('postgres'):
+            return {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': parsed.path.lstrip('/'),
+                'USER': parsed.username or '',
+                'PASSWORD': unquote(parsed.password or ''),
+                'HOST': parsed.hostname or 'localhost',
+                'PORT': str(parsed.port or 5432),
+            }
+
+    postgres_db = os.environ.get('POSTGRES_DB')
+    if postgres_db:
+        return {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': postgres_db,
+            'USER': os.environ.get('POSTGRES_USER', 'postgres'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+            'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        }
+
+    return {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+
+
+DEBUG = env_bool('DEBUG', False)
 
 
 ALLOWED_HOSTS = env_list(
@@ -89,10 +132,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': database_config(),
 }
 
 
