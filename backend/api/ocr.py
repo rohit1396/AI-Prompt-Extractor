@@ -5,6 +5,9 @@ from tempfile import NamedTemporaryFile
 from typing import Any
 
 from PIL import Image
+import logging
+
+logger = logging.getLogger(__name__)
 
 _OCR_ENGINE: Any | None = None
 
@@ -12,6 +15,7 @@ _OCR_ENGINE: Any | None = None
 def _get_ocr_engine() -> Any:
     global _OCR_ENGINE
     if _OCR_ENGINE is None:
+        logger.info('OCR engine init started')
         try:
             from paddleocr import PaddleOCR
         except ModuleNotFoundError as exc:
@@ -26,10 +30,11 @@ def _get_ocr_engine() -> Any:
             lang='en',
             enable_mkldnn=False,
         )
+        logger.info('OCR engine init completed')
     return _OCR_ENGINE
 
 
-def extract_prompt_text(uploaded_file) -> str:
+def extract_prompt_text(uploaded_file, *, extraction_id: str | None = None) -> str:
     original_path = uploaded_file.temporary_file_path() if hasattr(uploaded_file, 'temporary_file_path') else None
     source_path = original_path
     temp_paths: list[str] = []
@@ -41,9 +46,24 @@ def extract_prompt_text(uploaded_file) -> str:
                     temp_file.write(chunk)
                 source_path = temp_file.name
             temp_paths.append(source_path)
+            logger.info(
+                'STEP 2: image staged for OCR extraction_id=%s source_path=%s',
+                extraction_id,
+                source_path,
+            )
 
+        logger.info(
+            'OCR call starting extraction_id=%s source_path=%s',
+            extraction_id,
+            source_path,
+        )
         ocr_engine = _get_ocr_engine()
         result = ocr_engine.ocr(source_path)
+        logger.info(
+            'OCR call completed extraction_id=%s source_path=%s',
+            extraction_id,
+            source_path,
+        )
 
         image_width = image_height = None
         try:
