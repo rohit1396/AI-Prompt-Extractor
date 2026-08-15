@@ -2,7 +2,7 @@
 
 ## POST `/api/v1/extractions/`
 
-Uploads a single image and returns extracted prompt text.
+Uploads a single image, persists an extraction record, and returns extracted prompt text.
 
 ### Request
 
@@ -25,8 +25,13 @@ Uploads a single image and returns extracted prompt text.
   "status": "completed",
   "filename": "prompt.png",
   "content_type": "image/png",
+  "file_size": 482901,
   "extracted_text": "Create a cinematic portrait of a cyberpunk runner...",
-  "message": "Prompt text extracted successfully."
+  "message": "Prompt text extracted successfully.",
+  "error_message": "",
+  "processing_time_ms": 28431,
+  "created_at": "2026-08-11T10:18:42Z",
+  "updated_at": "2026-08-11T10:19:10Z"
 }
 ```
 
@@ -50,7 +55,12 @@ Uploads a single image and returns extracted prompt text.
   "status": "failed",
   "filename": "prompt.png",
   "content_type": "image/png",
+  "file_size": 482901,
   "extracted_text": "",
-  "message": "Unable to extract text from the uploaded image."
+  "message": "Unable to extract text from the uploaded image.",
+  "error_message": "OCR processing failed.",
+  "processing_time_ms": 28431,
+  "created_at": "2026-08-11T10:18:42Z",
+  "updated_at": "2026-08-11T10:19:10Z"
 }
 ```

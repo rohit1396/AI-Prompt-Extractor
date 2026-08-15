@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: promptlens
+      POSTGRES_USER: promptlens
+      POSTGRES_PASSWORD: promptlens
+    ports:
+      - "5432:5432"
+    volumes:
+      - promptlens_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  promptlens_postgres_data:
