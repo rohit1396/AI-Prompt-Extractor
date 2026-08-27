@@ -1,3 +1,11 @@
+"""
+OCR extraction helpers kept for the future background worker path.
+
+Step 1 of the async split intentionally removes OCR from the HTTP upload
+request. Keep this module intact so the worker can import it later without
+having to reconstruct the PaddleOCR pipeline.
+"""
+
 from __future__ import annotations
 
 import os
@@ -35,6 +43,8 @@ def _get_ocr_engine() -> Any:
 
 
 def extract_prompt_text(uploaded_file, *, extraction_id: str | None = None) -> str:
+    # This function is the OCR implementation we will move behind a worker
+    # queue. It is intentionally no longer called from the upload endpoint.
     original_path = uploaded_file.temporary_file_path() if hasattr(uploaded_file, 'temporary_file_path') else None
     source_path = original_path
     temp_paths: list[str] = []
