@@ -40,7 +40,9 @@ export function ImageProcessingPage({
   const previewUrl = useMemo(() => session.previewUrl, [session.previewUrl])
 
   const isCompleted = session.status === 'completed' && session.response
+  const isFailed = session.status === 'failed'
   const extractedText = session.response?.extracted_text.trim()
+  const backendStatus = session.response?.status ?? (session.status === 'error' ? 'error' : 'queued')
 
   return (
     <main className="min-h-screen bg-[#fafafa] text-slate-700">
@@ -64,11 +66,7 @@ export function ImageProcessingPage({
                     <div className="mt-2 text-sm text-slate-600">
                       Backend response:{' '}
                       <span className="font-medium text-slate-900">
-                        {session.status === 'error'
-                          ? 'failed'
-                          : session.status === 'completed'
-                            ? session.response?.status
-                            : 'processing'}
+                        {backendStatus}
                       </span>
                     </div>
                   </div>
@@ -99,6 +97,15 @@ export function ImageProcessingPage({
                 </div>
               ) : null}
 
+              {isFailed ? (
+                <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                  {session.error ?? session.response?.message ?? 'OCR processing failed.'}
+                  {session.response?.error_message ? (
+                    <div className="mt-2 text-xs text-rose-700/90">{session.response.error_message}</div>
+                  ) : null}
+                </div>
+              ) : null}
+
               {isCompleted ? (
                 <>
                   <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -112,7 +119,7 @@ export function ImageProcessingPage({
               ) : (
                 <>
                   <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                    Upload complete. OCR and prompt cleanup are still running.
+                    {session.response?.message ?? 'Upload complete. OCR and prompt cleanup are still running.'}
                   </div>
 
                   <div className="mt-5 space-y-3">
@@ -145,6 +152,8 @@ export function ImageProcessingPage({
                         width:
                           session.status === 'completed'
                             ? '100%'
+                            : session.status === 'failed'
+                              ? '100%'
                             : session.status === 'error'
                               ? '20%'
                               : '72%',
@@ -158,7 +167,11 @@ export function ImageProcessingPage({
         </div>
 
         <p className="mt-6 text-center text-sm text-slate-500">
-          {isCompleted ? 'Extraction completed successfully.' : 'This usually takes 5-10 seconds'}
+          {isCompleted
+            ? 'Extraction completed successfully.'
+            : isFailed
+              ? 'OCR failed. You can upload another image or try again later.'
+              : 'This usually takes 5-10 seconds'}
         </p>
       </section>
     </main>

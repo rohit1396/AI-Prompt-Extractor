@@ -1,5 +1,6 @@
 import logging
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.response import Response
@@ -24,23 +25,46 @@ class ExtractionUploadView(APIView):
         serializer.is_valid(raise_exception=True)
 
         image = serializer.validated_data['image']
-        # OCR is intentionally deferred to a future worker so this request only
-        # validates and stores the upload.
-        extraction = Extraction.objects.create(
-            image=image,
-            original_filename=image.name,
-            file_size=image.size,
-            content_type=image.content_type,
-            status=Extraction.Status.RECEIVED,
-            message='Image received. OCR will be processed asynchronously.',
-        )
+        with transaction.atomic():
+            extraction = Extraction.objects.create(
+                image=image,
+                original_filename=image.name,
+                file_size=image.size,
+                content_type=image.content_type,
+                status=Extraction.Status.RECEIVED,
+                message='Image received.',
+            )
 
-        logger.info(
-            'STEP 2: image saved extraction_id=%s filename=%s file_size=%s',
-            extraction.id,
-            image.name,
-            image.size,
-        )
+            logger.info(
+                'STEP 2: image saved extraction_id=%s filename=%s file_size=%s',
+                extraction.id,
+                image.name,
+                image.size,
+            )
+
+            try:
+                from .tasks import process_extraction
+
+                extraction.status = Extraction.Status.QUEUED
+                extraction.message = 'Image received. OCR job queued.'
+                extraction.error_message = ''
+                extraction.save(
+                    update_fields=['status', 'message', 'error_message', 'updated_at'],
+                )
+
+                transaction.on_commit(lambda: process_extraction.delay(str(extraction.id)))
+            except Exception as exc:
+                logger.exception('Failed to queue extraction_id=%s', extraction.id)
+                extraction.status = Extraction.Status.FAILED
+                extraction.message = 'Unable to queue the OCR job.'
+                extraction.error_message = str(exc) or 'Queueing OCR job failed.'
+                extraction.save(
+                    update_fields=['status', 'message', 'error_message', 'updated_at'],
+                )
+
+                payload = _serialize_extraction(extraction)
+                response_serializer = ExtractionResponseSerializer(payload)
+                return Response(response_serializer.data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         payload = _serialize_extraction(extraction)
         response_serializer = ExtractionResponseSerializer(payload)
