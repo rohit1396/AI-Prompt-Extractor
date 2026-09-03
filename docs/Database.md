@@ -14,7 +14,7 @@ The `Extraction` model stores the first durable record for the app:
 - `original_filename`: original client filename
 - `file_size`: bytes
 - `content_type`: image MIME type
-- `status`: `received`, `processing`, `completed`, `failed`
+- `status`: `received`, `queued`, `processing`, `completed`, `failed`
 - `extracted_text`: OCR output
 - `message`: user-facing status message
 - `error_message`: backend error detail
@@ -28,8 +28,9 @@ Use the root `.env.example` as the starting point.
 
 For PostgreSQL-based development:
 
-- start the database with `docker compose up -d postgres`
+- start the database with `docker compose up -d postgres redis`
 - set `DATABASE_URL=postgresql://promptlens:promptlens@localhost:5432/promptlens`
+- set `CELERY_BROKER_URL=redis://localhost:6379/0`
 - run `python manage.py migrate`
 
 If PostgreSQL is not available yet, Django will fall back to SQLite so the project still boots during early development.

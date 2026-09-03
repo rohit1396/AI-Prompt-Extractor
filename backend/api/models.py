@@ -6,6 +6,7 @@ from django.db import models
 class Extraction(models.Model):
     class Status(models.TextChoices):
         RECEIVED = 'received', 'Received'
+        QUEUED = 'queued', 'Queued'
         PROCESSING = 'processing', 'Processing'
         COMPLETED = 'completed', 'Completed'
         FAILED = 'failed', 'Failed'

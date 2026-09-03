@@ -47,3 +47,8 @@ Production:
 Backend database:
 - `DATABASE_URL=postgresql://promptlens:promptlens@localhost:5432/promptlens`
 - or `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
+
+Background jobs:
+- `CELERY_BROKER_URL=redis://localhost:6379/0`
+- `CELERY_RESULT_BACKEND=redis://localhost:6379/0`
+- start the worker with `celery -A config worker -l info --concurrency=1` from `backend/`

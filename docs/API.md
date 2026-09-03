@@ -2,7 +2,7 @@
 
 ## POST `/api/v1/extractions/`
 
-Uploads a single image, persists an extraction record, and returns extracted prompt text.
+Uploads a single image, persists an extraction record, and queues OCR work.
 
 ### Request
 
@@ -22,16 +22,16 @@ Uploads a single image, persists an extraction record, and returns extracted pro
 ```json
 {
   "id": "2d2f3d0f-8e4c-4a71-bd4f-8dcf4ec8ed42",
-  "status": "completed",
+  "status": "queued",
   "filename": "prompt.png",
   "content_type": "image/png",
   "file_size": 482901,
-  "extracted_text": "Create a cinematic portrait of a cyberpunk runner...",
-  "message": "Prompt text extracted successfully.",
+  "extracted_text": "",
+  "message": "Image received. OCR job queued.",
   "error_message": "",
-  "processing_time_ms": 28431,
+  "processing_time_ms": null,
   "created_at": "2026-08-11T10:18:42Z",
-  "updated_at": "2026-08-11T10:19:10Z"
+  "updated_at": "2026-08-11T10:18:43Z"
 }
 ```
 
@@ -47,7 +47,7 @@ Uploads a single image, persists an extraction record, and returns extracted pro
 }
 ```
 
-`500 Internal Server Error`
+`503 Service Unavailable`
 
 ```json
 {
@@ -57,10 +57,16 @@ Uploads a single image, persists an extraction record, and returns extracted pro
   "content_type": "image/png",
   "file_size": 482901,
   "extracted_text": "",
-  "message": "Unable to extract text from the uploaded image.",
-  "error_message": "OCR processing failed.",
-  "processing_time_ms": 28431,
+  "message": "Unable to queue the OCR job.",
+  "error_message": "Broker is unavailable.",
+  "processing_time_ms": null,
   "created_at": "2026-08-11T10:18:42Z",
-  "updated_at": "2026-08-11T10:19:10Z"
+  "updated_at": "2026-08-11T10:18:43Z"
 }
 ```
+
+## GET `/api/v1/extractions/<id>/`
+
+Returns the current persisted extraction state so the frontend can poll for progress.
+
+The response shape matches the POST response, but `status` may be `received`, `queued`, `processing`, `completed`, or `failed`.

@@ -74,6 +74,10 @@ def database_config() -> dict[str, object]:
     }
 
 
+def celery_url(name: str, default: str) -> str:
+    return os.environ.get(name, default)
+
+
 DEBUG = env_bool('DEBUG', False)
 
 
@@ -134,6 +138,15 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': database_config(),
 }
+
+CELERY_BROKER_URL = celery_url('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = celery_url('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_ALWAYS_EAGER = env_bool('CELERY_TASK_ALWAYS_EAGER', False)
+CELERY_TASK_EAGER_PROPAGATES = env_bool('CELERY_TASK_EAGER_PROPAGATES', True)
 
 
 # Password validation

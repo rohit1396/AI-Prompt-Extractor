@@ -1,10 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { ExtractionResponse } from '../api/extractions'
-import { uploadExtractionImage } from '../api/extractions'
+import type { ExtractionRecord } from '../api/extractions'
+import { fetchExtraction, uploadExtractionImage } from '../api/extractions'
 
 export type ChecklistItem = {
-  key: 'received' | 'preprocess' | 'ocr'
+  key: 'received' | 'queued' | 'processing'
   label: string
   status: 'pending' | 'running' | 'done'
 }
@@ -12,8 +12,8 @@ export type ChecklistItem = {
 export type ExtractionSession = {
   file: File
   previewUrl: string
-  status: 'idle' | 'uploading' | 'completed' | 'error'
-  response: ExtractionResponse | null
+  status: 'idle' | 'uploading' | 'processing' | 'completed' | 'failed' | 'error'
+  response: ExtractionRecord | null
   error: string | null
   checklist: ChecklistItem[]
 }
@@ -28,8 +28,8 @@ const ExtractionSessionContext = createContext<ExtractionSessionContextValue | n
 
 const CHECKLIST_TEMPLATE: Omit<ChecklistItem, 'status'>[] = [
   { key: 'received', label: 'Image received' },
-  { key: 'preprocess', label: 'Preprocessing done' },
-  { key: 'ocr', label: 'OCR extraction in progress' },
+  { key: 'queued', label: 'OCR job queued' },
+  { key: 'processing', label: 'OCR extraction in progress' },
 ]
 
 function buildChecklist(activeKey: ChecklistItem['key'] | null, doneThrough: ChecklistItem['key'][] = []) {
@@ -46,41 +46,142 @@ function buildChecklist(activeKey: ChecklistItem['key'] | null, doneThrough: Che
   })
 }
 
+function buildChecklistForStatus(status: ExtractionRecord['status'] | null) {
+  if (status === 'completed') {
+    return buildChecklist(null, ['received', 'queued', 'processing'])
+  }
+
+  if (status === 'failed') {
+    return buildChecklist(null, ['received', 'queued'])
+  }
+
+  if (status === 'processing') {
+    return buildChecklist('processing', ['received', 'queued'])
+  }
+
+  if (status === 'queued') {
+    return buildChecklist('queued', ['received'])
+  }
+
+  return buildChecklist('received')
+}
+
+const POLL_INTERVAL_MS = 2000
+
 export function ExtractionSessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<ExtractionSession | null>(null)
   const previewUrlRef = useRef<string | null>(null)
-  const timersRef = useRef<number[]>([])
+  const pollTimerRef = useRef<number | null>(null)
   const activeRequestRef = useRef(0)
 
-  const clearTimers = useCallback(() => {
-    timersRef.current.forEach((timer) => window.clearTimeout(timer))
-    timersRef.current = []
+  const clearPollTimer = useCallback(() => {
+    if (pollTimerRef.current !== null) {
+      window.clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
   }, [])
 
   const resetSession = useCallback(() => {
     activeRequestRef.current += 1
-    clearTimers()
+    clearPollTimer()
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current)
       previewUrlRef.current = null
     }
     setSession(null)
-  }, [clearTimers])
+  }, [clearPollTimer])
 
   useEffect(() => {
     return () => {
-      clearTimers()
+      clearPollTimer()
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current)
         previewUrlRef.current = null
       }
     }
-  }, [clearTimers])
+  }, [clearPollTimer])
+
+  const schedulePoll = useCallback(
+    (requestId: number, extractionId: string) => {
+      const poll = async () => {
+        if (activeRequestRef.current !== requestId) return
+
+        try {
+          const latest = await fetchExtraction(extractionId)
+          if (activeRequestRef.current !== requestId) return
+
+          if (latest.status === 'completed') {
+            clearPollTimer()
+            setSession((current) =>
+              current
+                ? {
+                    ...current,
+                    status: 'completed',
+                    response: latest,
+                    error: null,
+                    checklist: buildChecklistForStatus(latest.status),
+                  }
+                : current,
+            )
+            return
+          }
+
+          if (latest.status === 'failed') {
+            clearPollTimer()
+            setSession((current) =>
+              current
+                ? {
+                    ...current,
+                    status: 'failed',
+                    response: latest,
+                    error: latest.error_message || latest.message || 'OCR processing failed.',
+                    checklist: buildChecklistForStatus(latest.status),
+                  }
+                : current,
+            )
+            return
+          }
+
+          setSession((current) =>
+            current
+              ? {
+                  ...current,
+                  status: 'processing',
+                  response: latest,
+                  error: null,
+                  checklist: buildChecklistForStatus(latest.status),
+                }
+              : current,
+          )
+
+          if (activeRequestRef.current !== requestId) return
+          pollTimerRef.current = window.setTimeout(poll, POLL_INTERVAL_MS)
+        } catch (error) {
+          if (activeRequestRef.current !== requestId) return
+
+          clearPollTimer()
+          setSession((current) =>
+            current
+              ? {
+                  ...current,
+                  status: 'error',
+                  error: error instanceof Error ? error.message : 'Unable to refresh extraction status.',
+                }
+              : current,
+          )
+        }
+      }
+
+      clearPollTimer()
+      pollTimerRef.current = window.setTimeout(poll, POLL_INTERVAL_MS)
+    },
+    [clearPollTimer],
+  )
 
   const startExtraction = useCallback((file: File) => {
     activeRequestRef.current += 1
     const requestId = activeRequestRef.current
-    clearTimers()
+    clearPollTimer()
 
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current)
@@ -95,58 +196,62 @@ export function ExtractionSessionProvider({ children }: { children: ReactNode })
       status: 'uploading',
       response: null,
       error: null,
-      checklist: buildChecklist('received'),
+      checklist: buildChecklistForStatus('received'),
     })
-
-    timersRef.current.push(
-      window.setTimeout(() => {
-        if (activeRequestRef.current !== requestId) return
-        setSession((current) =>
-          current
-            ? {
-                ...current,
-                checklist: buildChecklist('preprocess', ['received']),
-              }
-            : current,
-        )
-      }, 500),
-    )
-
-    timersRef.current.push(
-      window.setTimeout(() => {
-        if (activeRequestRef.current !== requestId) return
-        setSession((current) =>
-          current
-            ? {
-                ...current,
-                checklist: buildChecklist('ocr', ['received', 'preprocess']),
-              }
-            : current,
-        )
-      }, 1200),
-    )
 
     void (async () => {
       try {
         const response = await uploadExtractionImage(file)
         if (activeRequestRef.current !== requestId) return
 
-        clearTimers()
+        if (response.status === 'completed') {
+          clearPollTimer()
+          setSession((current) =>
+            current
+              ? {
+                  ...current,
+                  status: 'completed',
+                  response,
+                  error: null,
+                  checklist: buildChecklistForStatus(response.status),
+                }
+              : current,
+          )
+          return
+        }
+
+        if (response.status === 'failed') {
+          clearPollTimer()
+          setSession((current) =>
+            current
+              ? {
+                  ...current,
+                  status: 'failed',
+                  response,
+                  error: response.error_message || response.message || 'OCR processing failed.',
+                  checklist: buildChecklistForStatus(response.status),
+                }
+              : current,
+          )
+          return
+        }
+
         setSession((current) =>
           current
             ? {
                 ...current,
-                status: 'completed',
+                status: 'processing',
                 response,
                 error: null,
-                checklist: buildChecklist(null, ['received', 'preprocess', 'ocr']),
+                checklist: buildChecklistForStatus(response.status),
               }
             : current,
         )
+        schedulePoll(requestId, response.id)
       } catch (error) {
         if (activeRequestRef.current !== requestId) return
 
-        clearTimers()
+        clearPollTimer()
         setSession((current) =>
           current
             ? {
@@ -154,13 +259,13 @@ export function ExtractionSessionProvider({ children }: { children: ReactNode })
                 status: 'error',
                 response: null,
                 error: error instanceof Error ? error.message : 'Upload failed. Please try again.',
-                checklist: buildChecklist(null, []),
+                checklist: buildChecklistForStatus(null),
               }
             : current,
         )
       }
     })()
-  }, [clearTimers])
+  }, [clearPollTimer, schedulePoll])
 
   const value = useMemo(
     () => ({
