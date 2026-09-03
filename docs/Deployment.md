@@ -2,6 +2,8 @@
 
 ## Required Environment Variables
 
+Place these values in the root `.env` file. The backend loads it automatically and the frontend reads the same file through Vite.
+
 - `DEBUG`
 - `ALLOWED_HOSTS`
 - `CORS_ALLOWED_ORIGINS`
@@ -13,7 +15,7 @@
 
 ## Local PostgreSQL
 
-1. Copy `.env.example` to your local environment file.
+1. Copy `.env.example` to `.env` at the repository root.
 2. Start the database and Redis services with `docker compose up -d postgres redis`.
 3. Run Django migrations from `backend/`.
 4. Start the backend, frontend, and a Celery worker against the same API URL.

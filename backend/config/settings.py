@@ -1,6 +1,9 @@
 import os
+import sys
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+
+from dotenv import load_dotenv
 
 """
 Django settings for config project.
@@ -16,6 +19,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = BASE_DIR.parent
+
+load_dotenv(ROOT_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -43,6 +49,12 @@ def env_list(name: str, default: str) -> list[str]:
 
 
 def database_config() -> dict[str, object]:
+    if 'test' in sys.argv[1:]:
+        return {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'test_db.sqlite3',
+        }
+
     database_url = os.environ.get('DATABASE_URL')
     if database_url:
         parsed = urlparse(database_url)

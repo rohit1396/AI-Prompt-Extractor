@@ -32,6 +32,8 @@ Sprint 1 - PostgreSQL persistence foundation
 
 ## Deployment Environment Variables
 
+Copy `.env.example` to `.env` at the repository root. Both apps load that file automatically, so no shell sourcing is required.
+
 Local development:
 - `VITE_API_BASE_URL=http://localhost:8000`
 - `ALLOWED_HOSTS=localhost,127.0.0.1`

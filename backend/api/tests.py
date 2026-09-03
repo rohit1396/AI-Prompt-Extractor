@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import os
+import subprocess
 import shutil
+import sys
 import tempfile
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from PIL import Image
 from rest_framework.test import APITestCase
 
@@ -117,3 +120,29 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         status = process_extraction_job('11111111-1111-1111-1111-111111111111')
 
         self.assertEqual(status, 'missing')
+
+
+class SettingsEnvLoadingTests(SimpleTestCase):
+    def test_settings_loads_root_env_without_manual_export(self):
+        backend_dir = Path(__file__).resolve().parents[1]
+        script = (
+            "from config import settings; "
+            "print(settings.DEBUG); "
+            "print(settings.DATABASES['default']['NAME'])"
+        )
+        env = {
+            'PYTHONPATH': str(backend_dir),
+            'PATH': os.environ.get('PATH', ''),
+        }
+
+        result = subprocess.run(
+            [sys.executable, '-c', script],
+            cwd=backend_dir,
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertIn('True', result.stdout)
+        self.assertIn('promptlens', result.stdout)
