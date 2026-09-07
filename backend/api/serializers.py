@@ -25,6 +25,9 @@ class ExtractionResponseSerializer(serializers.Serializer):
     filename = serializers.CharField()
     content_type = serializers.CharField()
     file_size = serializers.IntegerField()
+    image_url = serializers.CharField(allow_blank=True, required=False)
+    storage_provider = serializers.CharField(required=False)
+    cloudinary_public_id = serializers.CharField(allow_blank=True, required=False)
     extracted_text = serializers.CharField()
     message = serializers.CharField()
     error_message = serializers.CharField(allow_blank=True, required=False)
@@ -42,6 +45,9 @@ class ExtractionRecordSerializer(serializers.ModelSerializer):
             'original_filename',
             'content_type',
             'file_size',
+            'storage_provider',
+            'cloudinary_public_id',
+            'cloudinary_secure_url',
             'extracted_text',
             'message',
             'error_message',

@@ -11,6 +11,11 @@ Place these values in the root `.env` file. The backend loads it automatically a
 - `DATABASE_URL` or the `POSTGRES_*` variables
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
+- `USE_CLOUDINARY_STORAGE`
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+- `CLOUDINARY_UPLOAD_FOLDER`
 - `VITE_API_BASE_URL`
 
 ## Local PostgreSQL

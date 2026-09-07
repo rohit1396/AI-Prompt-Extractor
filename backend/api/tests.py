@@ -25,6 +25,13 @@ def _build_image_file(filename: str = 'prompt.png', *, color: str = 'white') -> 
     return SimpleUploadedFile(filename, buffer.read(), content_type='image/png')
 
 
+def _build_temp_image_path(*, color: str = 'white') -> str:
+    temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+    temp_file.close()
+    Image.new('RGB', (128, 128), color=color).save(temp_file.name, format='PNG')
+    return temp_file.name
+
+
 class ExtractionAsyncWorkflowTests(APITestCase):
     @classmethod
     def setUpClass(cls):
@@ -68,6 +75,94 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual(extraction.message, 'Image received. OCR job queued.')
         mock_delay.assert_called_once_with(str(extraction.id))
 
+    def test_upload_to_cloudinary_persists_remote_metadata(self):
+        with override_settings(
+            USE_CLOUDINARY_STORAGE=True,
+            CLOUDINARY_CLOUD_NAME='demo',
+            CLOUDINARY_API_KEY='key',
+            CLOUDINARY_API_SECRET='secret',
+        ):
+            with patch('api.views.upload_image_to_cloudinary') as mock_upload:
+                mock_upload.return_value = type(
+                    'CloudinaryUploadResult',
+                    (),
+                    {
+                        'public_id': 'promptlens/extractions/demo-public-id',
+                        'secure_url': 'https://res.cloudinary.com/demo/image/upload/v1/promptlens/extractions/demo-public-id.png',
+                        'version': 1,
+                    },
+                )()
+
+                with patch('api.tasks.process_extraction.delay') as mock_delay:
+                    with self.captureOnCommitCallbacks(execute=True):
+                        response = self.client.post(
+                            '/api/v1/extractions/',
+                            {'image': _build_image_file()},
+                            format='multipart',
+                        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['storage_provider'], 'cloudinary')
+        self.assertEqual(response.data['cloudinary_public_id'], 'promptlens/extractions/demo-public-id')
+        self.assertEqual(
+            response.data['image_url'],
+            'https://res.cloudinary.com/demo/image/upload/v1/promptlens/extractions/demo-public-id.png',
+        )
+
+        extraction = Extraction.objects.get()
+        self.assertEqual(extraction.storage_provider, Extraction.StorageProvider.CLOUDINARY)
+        self.assertEqual(extraction.cloudinary_public_id, 'promptlens/extractions/demo-public-id')
+        self.assertEqual(extraction.cloudinary_secure_url, response.data['image_url'])
+        mock_upload.assert_called_once()
+        mock_delay.assert_called_once_with(str(extraction.id))
+
+    def test_cloudinary_upload_failure_returns_service_unavailable(self):
+        with override_settings(
+            USE_CLOUDINARY_STORAGE=True,
+            CLOUDINARY_CLOUD_NAME='demo',
+            CLOUDINARY_API_KEY='key',
+            CLOUDINARY_API_SECRET='secret',
+        ):
+            with patch('api.views.upload_image_to_cloudinary', side_effect=RuntimeError('Cloudinary down')):
+                response = self.client.post(
+                    '/api/v1/extractions/',
+                    {'image': _build_image_file()},
+                    format='multipart',
+                )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.data['detail'], 'Cloudinary down')
+        self.assertEqual(Extraction.objects.count(), 0)
+
+    def test_db_failure_after_cloudinary_upload_cleans_up_asset(self):
+        with override_settings(
+            USE_CLOUDINARY_STORAGE=True,
+            CLOUDINARY_CLOUD_NAME='demo',
+            CLOUDINARY_API_KEY='key',
+            CLOUDINARY_API_SECRET='secret',
+        ):
+            with patch('api.views.upload_image_to_cloudinary') as mock_upload:
+                mock_upload.return_value = type(
+                    'CloudinaryUploadResult',
+                    (),
+                    {
+                        'public_id': 'promptlens/extractions/failure-case',
+                        'secure_url': 'https://res.cloudinary.com/demo/image/upload/v1/promptlens/extractions/failure-case.png',
+                        'version': 1,
+                    },
+                )()
+                with patch('api.views.Extraction.objects.create', side_effect=RuntimeError('db unavailable')):
+                    with patch('api.views.delete_image_from_cloudinary') as mock_delete:
+                        response = self.client.post(
+                            '/api/v1/extractions/',
+                            {'image': _build_image_file()},
+                            format='multipart',
+                        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.data['detail'], 'Unable to persist the uploaded image.')
+        mock_delete.assert_called_once_with('promptlens/extractions/failure-case')
+
     def test_worker_transitions_queued_extraction_to_completed(self):
         extraction = self._create_queued_extraction()
 
@@ -81,6 +176,34 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual(extraction.message, 'Prompt text extracted successfully.')
         self.assertIsNotNone(extraction.processing_time_ms)
         self.assertEqual(extraction.error_message, '')
+
+    def test_worker_downloads_cloudinary_asset_before_ocr(self):
+        temp_path = _build_temp_image_path()
+        extraction = Extraction.objects.create(
+            image=None,
+            storage_provider=Extraction.StorageProvider.CLOUDINARY,
+            cloudinary_public_id='promptlens/extractions/cloudinary-case',
+            cloudinary_secure_url='https://res.cloudinary.com/demo/image/upload/v1/promptlens/extractions/cloudinary-case.png',
+            original_filename='prompt.png',
+            file_size=123,
+            content_type='image/png',
+            status=Extraction.Status.QUEUED,
+            message='Image received. OCR job queued.',
+        )
+
+        try:
+            with patch('api.tasks.download_remote_file', return_value=temp_path) as mock_download:
+                with patch('api.tasks.extract_prompt_text_from_path', return_value='Cloudinary prompt text'):
+                    status = process_extraction_job(str(extraction.id))
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        extraction.refresh_from_db()
+        self.assertEqual(status, Extraction.Status.COMPLETED)
+        self.assertEqual(extraction.status, Extraction.Status.COMPLETED)
+        self.assertEqual(extraction.extracted_text, 'Cloudinary prompt text')
+        mock_download.assert_called_once_with(extraction.cloudinary_secure_url)
 
     def test_worker_marks_extraction_failed_on_ocr_error(self):
         extraction = self._create_queued_extraction()

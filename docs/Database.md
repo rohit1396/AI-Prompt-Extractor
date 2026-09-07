@@ -10,7 +10,11 @@ SQLite is still available as a local fallback, but the project can be pointed at
 The `Extraction` model stores the first durable record for the app:
 
 - `id`: UUID primary key
-- `image`: uploaded file path
+- `image`: uploaded file path for legacy/local rows
+- `storage_provider`: `local` or `cloudinary`
+- `cloudinary_public_id`: Cloudinary asset id for remote rows
+- `cloudinary_secure_url`: Cloudinary delivery URL for remote rows
+- `cloudinary_version`: Cloudinary version number
 - `original_filename`: original client filename
 - `file_size`: bytes
 - `content_type`: image MIME type

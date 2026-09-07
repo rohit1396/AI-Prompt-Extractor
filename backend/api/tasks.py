@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+import os
 from time import perf_counter
 
 from celery import shared_task
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 
+from .cloudinary import download_remote_file
 from .models import Extraction
 from .ocr import extract_prompt_text_from_path
 
@@ -44,6 +46,33 @@ def _set_extraction_status(
     )
 
 
+def _resolve_source_path(extraction: Extraction) -> tuple[str, list[str]]:
+    temp_paths: list[str] = []
+
+    if extraction.storage_provider == Extraction.StorageProvider.CLOUDINARY:
+        remote_url = extraction.cloudinary_secure_url
+        if not remote_url:
+            raise FileNotFoundError(f'Cloudinary URL missing for extraction {extraction.id}')
+        temp_path = download_remote_file(remote_url)
+        temp_paths.append(temp_path)
+        return temp_path, temp_paths
+
+    if extraction.image:
+        try:
+            source_path = extraction.image.path
+            if source_path:
+                return source_path, temp_paths
+        except (ValueError, OSError, NotImplementedError):
+            pass
+
+    if extraction.cloudinary_secure_url:
+        temp_path = download_remote_file(extraction.cloudinary_secure_url)
+        temp_paths.append(temp_path)
+        return temp_path, temp_paths
+
+    raise FileNotFoundError(f'Image file does not exist for extraction {extraction.id}')
+
+
 def process_extraction_job(extraction_id: str) -> str:
     started_at = perf_counter()
 
@@ -77,10 +106,19 @@ def process_extraction_job(extraction_id: str) -> str:
         return 'missing'
 
     try:
-        extracted_text = extract_prompt_text_from_path(
-            extraction.image.path,
-            extraction_id=str(extraction.id),
-        )
+        source_path, temp_paths = _resolve_source_path(extraction)
+        try:
+            extracted_text = extract_prompt_text_from_path(
+                source_path,
+                extraction_id=str(extraction.id),
+            )
+        finally:
+            for temp_path in temp_paths:
+                try:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                except OSError:
+                    pass
         processing_time_ms = int((perf_counter() - started_at) * 1000)
 
         with transaction.atomic():
