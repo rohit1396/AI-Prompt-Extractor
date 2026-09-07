@@ -91,6 +91,11 @@ def celery_url(name: str, default: str) -> str:
 
 
 DEBUG = env_bool('DEBUG', False)
+USE_CLOUDINARY_STORAGE = env_bool('USE_CLOUDINARY_STORAGE', False)
+CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
+CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '')
+CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', '')
+CLOUDINARY_UPLOAD_FOLDER = os.environ.get('CLOUDINARY_UPLOAD_FOLDER', 'promptlens/extractions')
 
 
 ALLOWED_HOSTS = env_list(
