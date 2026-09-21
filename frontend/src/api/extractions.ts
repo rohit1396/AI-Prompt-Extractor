@@ -8,6 +8,19 @@ export type ExtractionRecord = {
   storage_provider?: 'local' | 'cloudinary'
   cloudinary_public_id?: string
   extracted_text: string
+  is_prompt?: boolean
+  prompt_confidence?: number | null
+  raw_ocr_text?: string
+  classification_label?: 'prompt' | 'not_prompt' | 'uncertain' | ''
+  classification_score?: number | null
+  classification_confidence?: number | null
+  matched_signals?: Array<{
+    text: string
+    category: string
+    weight: number
+    polarity: 'positive' | 'negative'
+  }>
+  classifier_version?: string
   message: string
   error_message?: string
   processing_time_ms?: number | null

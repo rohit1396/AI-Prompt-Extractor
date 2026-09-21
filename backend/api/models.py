@@ -8,6 +8,11 @@ class Extraction(models.Model):
         LOCAL = 'local', 'Local'
         CLOUDINARY = 'cloudinary', 'Cloudinary'
 
+    class ClassificationLabel(models.TextChoices):
+        PROMPT = 'prompt', 'Prompt'
+        NOT_PROMPT = 'not_prompt', 'Not prompt'
+        UNCERTAIN = 'uncertain', 'Uncertain'
+
     class Status(models.TextChoices):
         RECEIVED = 'received', 'Received'
         QUEUED = 'queued', 'Queued'
@@ -30,6 +35,17 @@ class Extraction(models.Model):
     content_type = models.CharField(max_length=100)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.RECEIVED)
     extracted_text = models.TextField(blank=True, default='')
+    raw_ocr_text = models.TextField(blank=True, default='')
+    classification_label = models.CharField(
+        max_length=20,
+        choices=ClassificationLabel.choices,
+        blank=True,
+        default='',
+    )
+    classification_score = models.IntegerField(null=True, blank=True)
+    classification_confidence = models.PositiveSmallIntegerField(null=True, blank=True)
+    matched_signals = models.JSONField(default=list, blank=True)
+    classifier_version = models.CharField(max_length=20, blank=True, default='')
     message = models.TextField(blank=True, default='')
     error_message = models.TextField(blank=True, default='')
     processing_time_ms = models.PositiveIntegerField(null=True, blank=True)
