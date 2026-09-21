@@ -9,14 +9,16 @@ class ExtractionAdmin(admin.ModelAdmin):
         'id',
         'original_filename',
         'status',
+        'classification_label',
+        'classification_confidence',
         'storage_provider',
         'file_size',
         'content_type',
         'processing_time_ms',
         'created_at',
     )
-    list_filter = ('status', 'storage_provider', 'content_type', 'created_at')
-    search_fields = ('id', 'original_filename', 'extracted_text', 'message', 'error_message')
+    list_filter = ('status', 'classification_label', 'storage_provider', 'content_type', 'created_at')
+    search_fields = ('id', 'original_filename', 'extracted_text', 'raw_ocr_text', 'message', 'error_message')
     readonly_fields = (
         'id',
         'created_at',
@@ -29,4 +31,10 @@ class ExtractionAdmin(admin.ModelAdmin):
         'cloudinary_public_id',
         'cloudinary_secure_url',
         'cloudinary_version',
+        'raw_ocr_text',
+        'classification_label',
+        'classification_score',
+        'classification_confidence',
+        'matched_signals',
+        'classifier_version',
     )

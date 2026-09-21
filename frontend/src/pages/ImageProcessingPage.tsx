@@ -30,6 +30,34 @@ function ChecklistIcon({ status }: { status: ExtractionSession['checklist'][numb
   return <div className="h-6 w-6 rounded-full border border-slate-300 bg-white" />
 }
 
+function ClassificationBadge({ label }: { label?: string }) {
+  if (label === 'prompt') {
+    return (
+      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+        Prompt-like
+      </span>
+    )
+  }
+
+  if (label === 'not_prompt') {
+    return (
+      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+        Not prompt-like
+      </span>
+    )
+  }
+
+  if (label === 'uncertain') {
+    return (
+      <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+        Uncertain
+      </span>
+    )
+  }
+
+  return null
+}
+
 export function ImageProcessingPage({
   session,
   onChangeImage,
@@ -41,8 +69,28 @@ export function ImageProcessingPage({
 
   const isCompleted = session.status === 'completed' && session.response
   const isFailed = session.status === 'failed'
+  const classificationLabel = session.response?.classification_label
   const extractedText = session.response?.extracted_text.trim()
+  const rawOcrText = session.response?.raw_ocr_text?.trim() ?? ''
+  const matchedSignals = session.response?.matched_signals ?? []
   const backendStatus = session.response?.status ?? (session.status === 'error' ? 'error' : 'queued')
+  const classificationTitle =
+    classificationLabel === 'prompt'
+      ? 'Prompt-like text detected'
+      : classificationLabel === 'not_prompt'
+        ? 'Text does not look like a prompt'
+        : classificationLabel === 'uncertain'
+          ? 'Classifier is unsure'
+          : 'Processing your image'
+  const classificationMessage =
+    classificationLabel === 'prompt'
+      ? session.response?.message ?? 'Prompt-like text extracted successfully.'
+      : classificationLabel === 'not_prompt'
+        ? session.response?.message ?? 'OCR completed, but the image does not look like a prompt.'
+        : classificationLabel === 'uncertain'
+          ? session.response?.message ?? 'OCR completed, but prompt evidence is limited.'
+          : session.response?.message ?? 'Upload complete. OCR and prompt classification are still running.'
+  const confidence = session.response?.prompt_confidence ?? session.response?.classification_confidence ?? null
 
   return (
     <main className="min-h-screen bg-[#fafafa] text-slate-700">
@@ -88,7 +136,7 @@ export function ImageProcessingPage({
           <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 sm:p-7">
             <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-6 sm:p-7">
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
-                {isCompleted ? 'Extracted prompt text' : 'Processing your image'}
+                {isCompleted ? classificationTitle : 'Processing your image'}
               </div>
 
               {session.status === 'error' ? (
@@ -108,18 +156,53 @@ export function ImageProcessingPage({
 
               {isCompleted ? (
                 <>
-                  <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                    {session.response?.message}
+                  <div
+                    className={[
+                      'mt-3 rounded-2xl px-4 py-3 text-sm',
+                      classificationLabel === 'prompt'
+                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : classificationLabel === 'not_prompt'
+                          ? 'border border-amber-200 bg-amber-50 text-amber-800'
+                          : 'border border-sky-200 bg-sky-50 text-sky-800',
+                    ].join(' ')}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ClassificationBadge label={classificationLabel} />
+                      {typeof confidence === 'number' ? (
+                        <span className="text-xs font-medium uppercase tracking-[0.18em] opacity-70">
+                          Prompt evidence {confidence}%
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-2">{classificationMessage}</div>
                   </div>
 
-                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-950 px-4 py-4 text-sm leading-6 whitespace-pre-wrap text-slate-100">
-                    {extractedText || 'No readable prompt text was detected in this image.'}
+                  <div className="mt-5 space-y-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Extracted OCR text</div>
+                      <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-950 px-4 py-4 text-sm leading-6 whitespace-pre-wrap text-slate-100">
+                        {extractedText || rawOcrText || 'No readable OCR text was detected in this image.'}
+                      </div>
+                    </div>
+
+                    {matchedSignals.length > 0 ? (
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                        <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Matched signals</div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {matchedSignals.map((signal) => (
+                            <span key={`${signal.polarity}-${signal.text}`} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
+                              {signal.text} · {signal.category}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </>
               ) : (
                 <>
                   <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                    {session.response?.message ?? 'Upload complete. OCR and prompt cleanup are still running.'}
+                    {classificationMessage}
                   </div>
 
                   <div className="mt-5 space-y-3">

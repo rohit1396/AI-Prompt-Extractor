@@ -14,6 +14,7 @@ from django.test import SimpleTestCase, override_settings
 from PIL import Image
 from rest_framework.test import APITestCase
 
+from .classification import classify_prompt_text
 from .models import Extraction
 from .tasks import process_extraction_job
 
@@ -58,13 +59,14 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         )
 
     def test_upload_marks_extraction_queued_and_enqueues_job(self):
-        with patch('api.tasks.process_extraction.delay') as mock_delay:
-            with self.captureOnCommitCallbacks(execute=True):
-                response = self.client.post(
-                    '/api/v1/extractions/',
-                    {'image': _build_image_file()},
-                    format='multipart',
-                )
+        with override_settings(USE_CLOUDINARY_STORAGE=False):
+            with patch('api.tasks.process_extraction.delay') as mock_delay:
+                with self.captureOnCommitCallbacks(execute=True):
+                    response = self.client.post(
+                        '/api/v1/extractions/',
+                        {'image': _build_image_file()},
+                        format='multipart',
+                    )
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['status'], 'queued')
@@ -173,9 +175,30 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual(status, Extraction.Status.COMPLETED)
         self.assertEqual(extraction.status, Extraction.Status.COMPLETED)
         self.assertEqual(extraction.extracted_text, 'Create a cinematic portrait')
-        self.assertEqual(extraction.message, 'Prompt text extracted successfully.')
+        self.assertEqual(extraction.raw_ocr_text, 'Create a cinematic portrait')
+        self.assertEqual(extraction.classification_label, 'uncertain')
+        self.assertEqual(extraction.classification_score, 7)
+        self.assertEqual(extraction.classification_confidence, 23)
+        self.assertEqual(extraction.message, 'OCR completed, but prompt evidence is limited.')
         self.assertIsNotNone(extraction.processing_time_ms)
         self.assertEqual(extraction.error_message, '')
+
+    def test_worker_preserves_non_prompt_ocr_results(self):
+        extraction = self._create_queued_extraction()
+
+        with patch('api.tasks.extract_prompt_text_from_path', return_value='Follow me for more AI images'):
+            status = process_extraction_job(str(extraction.id))
+
+        extraction.refresh_from_db()
+        self.assertEqual(status, Extraction.Status.COMPLETED)
+        self.assertEqual(extraction.status, Extraction.Status.COMPLETED)
+        self.assertEqual(extraction.extracted_text, 'Follow me for more AI images')
+        self.assertEqual(extraction.raw_ocr_text, 'Follow me for more AI images')
+        self.assertEqual(extraction.classification_label, 'not_prompt')
+        self.assertFalse(extraction.classification_label == 'prompt')
+        self.assertEqual(extraction.classification_confidence, 0)
+        self.assertEqual(extraction.message, 'OCR completed, but the image does not look like a prompt.')
+        self.assertGreater(len(extraction.matched_signals), 0)
 
     def test_worker_downloads_cloudinary_asset_before_ocr(self):
         temp_path = _build_temp_image_path()
@@ -203,7 +226,23 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual(status, Extraction.Status.COMPLETED)
         self.assertEqual(extraction.status, Extraction.Status.COMPLETED)
         self.assertEqual(extraction.extracted_text, 'Cloudinary prompt text')
+        self.assertEqual(extraction.classification_label, 'uncertain')
         mock_download.assert_called_once_with(extraction.cloudinary_secure_url)
+
+    def test_detail_endpoint_includes_classification_fields(self):
+        extraction = self._create_queued_extraction()
+
+        with patch('api.tasks.extract_prompt_text_from_path', return_value='cinematic portrait, 35mm lens'):
+            process_extraction_job(str(extraction.id))
+
+        response = self.client.get(f'/api/v1/extractions/{extraction.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['is_prompt'])
+        self.assertEqual(response.data['classification_label'], 'prompt')
+        self.assertGreater(response.data['prompt_confidence'], 0)
+        self.assertEqual(response.data['raw_ocr_text'], 'cinematic portrait, 35mm lens')
+        self.assertGreater(len(response.data['matched_signals']), 0)
 
     def test_worker_marks_extraction_failed_on_ocr_error(self):
         extraction = self._create_queued_extraction()
@@ -243,6 +282,63 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         status = process_extraction_job('11111111-1111-1111-1111-111111111111')
 
         self.assertEqual(status, 'missing')
+
+
+class PromptClassificationTests(SimpleTestCase):
+    def test_classifier_scores_prompt_like_text(self):
+        result = classify_prompt_text('cinematic portrait, 35mm lens, shallow depth of field')
+
+        self.assertTrue(result.is_prompt)
+        self.assertEqual(result.label, 'prompt')
+        self.assertGreaterEqual(result.score, 5)
+        self.assertGreater(result.confidence, 0)
+        self.assertLess(result.confidence, 70)
+        self.assertTrue(result.matched_signals)
+
+    def test_classifier_rejects_social_media_text(self):
+        result = classify_prompt_text('Follow me for more AI images')
+
+        self.assertFalse(result.is_prompt)
+        self.assertEqual(result.label, 'not_prompt')
+        self.assertLessEqual(result.score, 0)
+        self.assertEqual(result.confidence, 0)
+
+    def test_classifier_normalizes_input_before_matching(self):
+        result = classify_prompt_text('CINEMATIC   PORTRAIT')
+
+        self.assertEqual(result.label, 'uncertain')
+
+    def test_classifier_accepts_explicit_ocr_aliases(self):
+        result = classify_prompt_text('Cinematic closeup, volumetric lightning, highy detailed')
+
+        self.assertEqual(result.label, 'prompt')
+        self.assertEqual({signal.text for signal in result.matched_signals}, {'cinematic', 'close-up', 'volumetric lighting', 'highly detailed'})
+
+    def test_classifier_treats_syntax_with_punctuation_as_strong_evidence(self):
+        result = classify_prompt_text('portrait of a fox --ar 16:9 --stylize 250')
+
+        self.assertEqual(result.label, 'prompt')
+        self.assertGreaterEqual(result.confidence, 50)
+
+    def test_classifier_caps_repeated_category_keywords(self):
+        result = classify_prompt_text('cinematic digital art concept art illustration anime character design')
+
+        self.assertEqual(result.label, 'uncertain')
+        self.assertEqual(result.score, 8)
+        self.assertEqual(result.confidence, 27)
+
+    def test_classifier_rejects_negative_text_even_with_generic_prompt_terms(self):
+        result = classify_prompt_text('Cinematic portrait. Follow me, subscribe, and visit our website.')
+
+        self.assertEqual(result.label, 'not_prompt')
+        self.assertEqual(result.confidence, 0)
+
+    def test_classifier_handles_empty_ocr_text(self):
+        result = classify_prompt_text('')
+
+        self.assertEqual(result.label, 'uncertain')
+        self.assertEqual(result.confidence, 0)
+        self.assertFalse(result.matched_signals)
 
 
 class SettingsEnvLoadingTests(SimpleTestCase):

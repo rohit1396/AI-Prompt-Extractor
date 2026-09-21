@@ -3,6 +3,8 @@
 ## POST `/api/v1/extractions/`
 
 Uploads a single image, persists an extraction record, and queues OCR work.
+The worker also classifies the OCR output so the API can distinguish prompt-like
+text from ordinary text.
 
 ### Request
 
@@ -30,6 +32,14 @@ Uploads a single image, persists an extraction record, and queues OCR work.
   "storage_provider": "cloudinary",
   "cloudinary_public_id": "promptlens/extractions/...",
   "extracted_text": "",
+  "is_prompt": false,
+  "prompt_confidence": null,
+  "raw_ocr_text": "",
+  "classification_label": "",
+  "classification_score": null,
+  "classification_confidence": null,
+  "matched_signals": [],
+  "classifier_version": "",
   "message": "Image received. OCR job queued.",
   "error_message": "",
   "processing_time_ms": null,
@@ -63,6 +73,14 @@ Uploads a single image, persists an extraction record, and queues OCR work.
   "storage_provider": "cloudinary",
   "cloudinary_public_id": "promptlens/extractions/...",
   "extracted_text": "",
+  "is_prompt": false,
+  "prompt_confidence": null,
+  "raw_ocr_text": "",
+  "classification_label": "",
+  "classification_score": null,
+  "classification_confidence": null,
+  "matched_signals": [],
+  "classifier_version": "",
   "message": "Unable to queue the OCR job.",
   "error_message": "Broker is unavailable.",
   "processing_time_ms": null,
@@ -76,3 +94,11 @@ Uploads a single image, persists an extraction record, and queues OCR work.
 Returns the current persisted extraction state so the frontend can poll for progress.
 
 The response shape matches the POST response, but `status` may be `received`, `queued`, `processing`, `completed`, or `failed`.
+
+When OCR finishes successfully:
+
+- `raw_ocr_text` and `extracted_text` contain the OCR output for every completed extraction, including `uncertain` and `not_prompt` classifications
+- `is_prompt` is `true` when the classifier believes the text is prompt-like
+- `prompt_confidence` is the prompt-evidence coverage (0–99), not a machine-learning probability
+- `classification_label` is `prompt`, `not_prompt`, or `uncertain`
+- `matched_signals` lists the weighted signals that contributed to the score

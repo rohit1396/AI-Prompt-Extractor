@@ -1,0 +1,19 @@
+{
+  "category_caps": {"social": 8, "commercial": 8},
+  "signals": [
+  {"text": "follow me", "category": "social", "weight": 6},
+  {"text": "like and share", "category": "social", "weight": 6},
+  {"text": "subscribe", "category": "social", "weight": 6},
+  {"text": "comment below", "category": "social", "weight": 5},
+  {"text": "link in bio", "category": "social", "weight": 6},
+  {"text": "giveaway", "category": "social", "weight": 5},
+  {"text": "buy now", "category": "commercial", "weight": 5},
+  {"text": "shop now", "category": "commercial", "weight": 5},
+  {"text": "limited offer", "category": "commercial", "weight": 4},
+  {"text": "sale", "category": "commercial", "weight": 4},
+  {"text": "new post", "category": "social", "weight": 4},
+  {"text": "visit our website", "category": "commercial", "weight": 4},
+  {"text": "watch now", "category": "social", "weight": 4},
+  {"text": "learn more", "category": "commercial", "weight": 3}
+  ]
+}
