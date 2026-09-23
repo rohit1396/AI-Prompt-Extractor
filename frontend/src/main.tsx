@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import { ImageProcessingPage } from './pages/ImageProcessingPage'
 import { HistoryPage } from './pages/HistoryPage'
+import { ExtractionDetailPage } from './pages/ExtractionDetailPage'
 import { ExtractionSessionProvider, useExtractionSession } from './context/ExtractionSessionContext'
 
 export function ImageProcessingEntry() {
@@ -34,6 +35,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<App />} />
           <Route path="/imageprocessing" element={<ImageProcessingEntry />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/history/:extractionId" element={<ExtractionDetailPage />} />
         </Routes>
       </BrowserRouter>
     </ExtractionSessionProvider>

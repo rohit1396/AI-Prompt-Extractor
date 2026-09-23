@@ -244,6 +244,11 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual(response.data['raw_ocr_text'], 'cinematic portrait, 35mm lens')
         self.assertGreater(len(response.data['matched_signals']), 0)
 
+    def test_detail_endpoint_returns_not_found_for_unknown_extraction(self):
+        response = self.client.get('/api/v1/extractions/11111111-1111-1111-1111-111111111111/')
+
+        self.assertEqual(response.status_code, 404)
+
     def test_history_endpoint_returns_newest_first_summary_records(self):
         older = self._create_queued_extraction()
         newer = self._create_queued_extraction()
