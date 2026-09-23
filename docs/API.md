@@ -102,3 +102,45 @@ When OCR finishes successfully:
 - `prompt_confidence` is the prompt-evidence coverage (0–99), not a machine-learning probability
 - `classification_label` is `prompt`, `not_prompt`, or `uncertain`
 - `matched_signals` lists the weighted signals that contributed to the score
+
+## GET `/api/v1/extractions/history/`
+
+Returns a newest-first, paginated summary of all extraction attempts. The endpoint includes queued, processing, completed, and failed records.
+
+### Query parameters
+
+- `page`: 1-based page number (default `1`)
+- `page_size`: number of records per page (default `20`, maximum `50`)
+
+### Success response
+
+`200 OK`
+
+```json
+{
+  "count": 42,
+  "next": "http://localhost:8000/api/v1/extractions/history/?page=2&page_size=20",
+  "previous": null,
+  "results": [
+    {
+      "id": "2d2f3d0f-8e4c-4a71-bd4f-8dcf4ec8ed42",
+      "status": "completed",
+      "filename": "prompt.png",
+      "content_type": "image/png",
+      "file_size": 482901,
+      "image_url": "https://res.cloudinary.com/...",
+      "storage_provider": "cloudinary",
+      "classification_label": "prompt",
+      "classification_score": 12,
+      "classification_confidence": 63,
+      "message": "Prompt-like text extracted successfully.",
+      "error_message": "",
+      "processing_time_ms": 820,
+      "created_at": "2026-08-11T10:18:42Z",
+      "updated_at": "2026-08-11T10:18:43Z"
+    }
+  ]
+}
+```
+
+The list intentionally omits OCR text and matched signals. Use the extraction detail endpoint with an item `id` when those full fields are needed.

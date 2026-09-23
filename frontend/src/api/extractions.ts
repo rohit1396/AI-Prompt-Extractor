@@ -28,6 +28,13 @@ export type ExtractionRecord = {
   updated_at?: string
 }
 
+export type ExtractionHistoryPage = {
+  count: number
+  next: string | null
+  previous: string | null
+  results: ExtractionRecord[]
+}
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -83,4 +90,24 @@ export async function fetchExtraction(id: string): Promise<ExtractionRecord> {
   }
 
   return payload as ExtractionRecord
+}
+
+export async function fetchExtractionHistory(page = 1, pageSize = 20): Promise<ExtractionHistoryPage> {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  const response = await fetch(`${API_BASE_URL}/api/v1/extractions/history/?${params.toString()}`)
+  const payload = (await response.json().catch(() => null)) as
+    | ExtractionHistoryPage
+    | { detail?: string; non_field_errors?: string[] }
+    | null
+
+  if (!response.ok) {
+    throw new Error(
+      buildErrorMessage(
+        payload as { detail?: string; non_field_errors?: string[] } | null,
+        'Unable to load extraction history.',
+      ),
+    )
+  }
+
+  return payload as ExtractionHistoryPage
 }
