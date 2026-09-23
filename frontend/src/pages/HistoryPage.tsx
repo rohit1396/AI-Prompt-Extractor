@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
 import { Navbar } from '../components/home/Navbar'
 import { fetchExtractionHistory, type ExtractionHistoryPage, type ExtractionRecord } from '../api/extractions'
 
@@ -33,9 +34,10 @@ function classificationText(record: ExtractionRecord) {
   return 'Not classified'
 }
 
-function HistoryCard({ record }: { record: ExtractionRecord }) {
+function HistoryCard({ record, page }: { record: ExtractionRecord; page: number }) {
   return (
-    <article className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+    <Link to={`/history/${record.id}?page=${page}`} className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+      <article className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md sm:flex-row sm:items-center">
       <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
         {record.image_url ? (
           <img src={record.image_url} alt={record.filename} className="h-full w-full object-cover" />
@@ -69,15 +71,18 @@ function HistoryCard({ record }: { record: ExtractionRecord }) {
           </span>
         ) : null}
       </div>
-    </article>
+      </article>
+    </Link>
   )
 }
 
 export function HistoryPage() {
-  const [page, setPage] = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
   const [history, setHistory] = useState<ExtractionHistoryPage | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const parsedPage = Number(searchParams.get('page'))
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1
 
   const loadHistory = useCallback(async () => {
     setLoading(true)
@@ -98,7 +103,7 @@ export function HistoryPage() {
   }, [loadHistory])
 
   const goToPage = (nextPage: number) => {
-    setPage(nextPage)
+    setSearchParams(nextPage === 1 ? {} : { page: String(nextPage) })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -133,7 +138,7 @@ export function HistoryPage() {
         {!loading && !error && history && history.results.length > 0 ? (
           <>
             <div className="space-y-3">
-              {history.results.map((record) => <HistoryCard key={record.id} record={record} />)}
+              {history.results.map((record) => <HistoryCard key={record.id} record={record} page={page} />)}
             </div>
             <div className="mt-6 flex items-center justify-between">
               <button type="button" disabled={!history.previous} onClick={() => goToPage(page - 1)} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-40">
