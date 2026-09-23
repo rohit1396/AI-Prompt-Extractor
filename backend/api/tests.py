@@ -244,6 +244,42 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual(response.data['raw_ocr_text'], 'cinematic portrait, 35mm lens')
         self.assertGreater(len(response.data['matched_signals']), 0)
 
+    def test_history_endpoint_returns_newest_first_summary_records(self):
+        older = self._create_queued_extraction()
+        newer = self._create_queued_extraction()
+        Extraction.objects.filter(pk=older.pk).update(original_filename='older.png')
+        Extraction.objects.filter(pk=newer.pk).update(original_filename='newer.png')
+
+        response = self.client.get('/api/v1/extractions/history/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 2)
+        self.assertEqual([item['filename'] for item in response.data['results']], ['newer.png', 'older.png'])
+        self.assertNotIn('extracted_text', response.data['results'][0])
+        self.assertIn('classification_score', response.data['results'][0])
+
+    def test_history_endpoint_paginates_and_includes_all_statuses(self):
+        for index, extraction_status in enumerate(
+            [Extraction.Status.RECEIVED, Extraction.Status.QUEUED, Extraction.Status.PROCESSING]
+        ):
+            image = _build_image_file(filename=f'{index}.png')
+            Extraction.objects.create(
+                image=image,
+                original_filename=f'{index}.png',
+                file_size=image.size,
+                content_type='image/png',
+                status=extraction_status,
+                message='Status recorded.',
+            )
+
+        response = self.client.get('/api/v1/extractions/history/?page_size=2&page=2')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 3)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertIsNotNone(response.data['previous'])
+        self.assertIsNone(response.data['next'])
+
     def test_worker_marks_extraction_failed_on_ocr_error(self):
         extraction = self._create_queued_extraction()
 

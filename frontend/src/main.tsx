@@ -4,6 +4,7 @@ import { Navigate, BrowserRouter, Route, Routes, useNavigate } from 'react-route
 import './index.css'
 import App from './App.tsx'
 import { ImageProcessingPage } from './pages/ImageProcessingPage'
+import { HistoryPage } from './pages/HistoryPage'
 import { ExtractionSessionProvider, useExtractionSession } from './context/ExtractionSessionContext'
 
 export function ImageProcessingEntry() {
@@ -32,6 +33,7 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<App />} />
           <Route path="/imageprocessing" element={<ImageProcessingEntry />} />
+          <Route path="/history" element={<HistoryPage />} />
         </Routes>
       </BrowserRouter>
     </ExtractionSessionProvider>

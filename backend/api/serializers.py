@@ -44,6 +44,24 @@ class ExtractionResponseSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField(required=False)
 
 
+class ExtractionHistorySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    status = serializers.CharField()
+    filename = serializers.CharField(source='original_filename')
+    content_type = serializers.CharField()
+    file_size = serializers.IntegerField()
+    image_url = serializers.CharField(allow_blank=True)
+    storage_provider = serializers.CharField()
+    classification_label = serializers.CharField(allow_blank=True)
+    classification_score = serializers.IntegerField(allow_null=True)
+    classification_confidence = serializers.IntegerField(allow_null=True)
+    message = serializers.CharField()
+    error_message = serializers.CharField(allow_blank=True)
+    processing_time_ms = serializers.IntegerField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
 class ExtractionRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = Extraction

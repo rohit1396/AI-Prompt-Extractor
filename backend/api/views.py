@@ -3,12 +3,13 @@ import logging
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .cloudinary import cloudinary_is_enabled, delete_image_from_cloudinary, upload_image_to_cloudinary
 from .models import Extraction
-from .serializers import ExtractionResponseSerializer, ImageUploadSerializer
+from .serializers import ExtractionHistorySerializer, ExtractionResponseSerializer, ImageUploadSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,24 @@ class ExtractionDetailView(APIView):
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 
 
+class ExtractionHistoryPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
+
+class ExtractionHistoryView(APIView):
+    def get(self, request):
+        queryset = Extraction.objects.order_by('-created_at', '-id')
+        paginator = ExtractionHistoryPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        serializer = ExtractionHistorySerializer(
+            [_history_payload(extraction) for extraction in page],
+            many=True,
+        )
+        return paginator.get_paginated_response(serializer.data)
+
+
 def _serialize_extraction(extraction: Extraction) -> dict[str, object]:
     image_url = extraction.cloudinary_secure_url
     if not image_url and extraction.image:
@@ -148,4 +167,25 @@ def _serialize_extraction(extraction: Extraction) -> dict[str, object]:
         'processing_time_ms': extraction.processing_time_ms,
         'created_at': extraction.created_at,
         'updated_at': extraction.updated_at,
+    }
+
+
+def _history_payload(extraction: Extraction) -> dict[str, object]:
+    payload = _serialize_extraction(extraction)
+    return {
+        'id': extraction.id,
+        'status': payload['status'],
+        'original_filename': payload['filename'],
+        'content_type': payload['content_type'],
+        'file_size': payload['file_size'],
+        'image_url': payload['image_url'],
+        'storage_provider': payload['storage_provider'],
+        'classification_label': payload['classification_label'],
+        'classification_score': payload['classification_score'],
+        'classification_confidence': payload['classification_confidence'],
+        'message': payload['message'],
+        'error_message': payload['error_message'],
+        'processing_time_ms': payload['processing_time_ms'],
+        'created_at': payload['created_at'],
+        'updated_at': payload['updated_at'],
     }
