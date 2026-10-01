@@ -16,7 +16,9 @@ from rest_framework.test import APITestCase
 
 from .classification import classify_prompt_text
 from .models import Extraction
+from .ocr import OCRTextLine, _normalize_ocr_result, _select_prompt_lines
 from .tasks import process_extraction_job
+from .text_cleaning import clean_extracted_text
 
 
 def _build_image_file(filename: str = 'prompt.png', *, color: str = 'white') -> SimpleUploadedFile:
@@ -380,6 +382,134 @@ class PromptClassificationTests(SimpleTestCase):
         self.assertEqual(result.label, 'uncertain')
         self.assertEqual(result.confidence, 0)
         self.assertFalse(result.matched_signals)
+
+
+class OCRTextCleaningTests(APITestCase):
+    def test_removes_wrappers_social_footer_and_numbering(self):
+        raw = """1. Here's the prompt
+Cinematic portrait of a woman
+standing in a rainy Tokyo street
+
+Follow @xyz
+Like & Share
+
+35mm lens
+shallow depth of field"""
+        self.assertEqual(
+            clean_extracted_text(raw),
+            "Cinematic portrait of a woman\nstanding in a rainy Tokyo street\n35mm lens\nshallow depth of field",
+        )
+
+    def test_removes_emoji_urls_handles_and_hashtags_on_noise_lines(self):
+        raw = "✨✨\nhttps://example.com/prompt\n@creator\n#aiart\nA cinematic portrait"
+        self.assertEqual(clean_extracted_text(raw), "A cinematic portrait")
+
+    def test_preserves_words_that_are_meaningful_inside_prompt_lines(self):
+        raw = "Share light across the face\nFollow the subject with a shallow depth of field"
+        self.assertEqual(clean_extracted_text(raw), raw)
+
+    def test_noise_only_text_returns_empty(self):
+        self.assertEqual(clean_extracted_text("Copy this prompt\n👍\nSave this\n@creator"), "")
+
+    def test_removes_reference_screenshot_headers_and_footer_ctas(self):
+        raw = """PROMPT:
+Create a realistic cinematic portrait of a man and a lion.
+Suggested settings:
+Style: Ultra-realistic, cinematic, 8K
+Save this!
+SWIPE <<<
+/prompt"""
+        self.assertEqual(
+            clean_extracted_text(raw),
+            "Create a realistic cinematic portrait of a man and a lion.\n"
+            "Suggested settings:\n"
+            "Style: Ultra-realistic, cinematic, 8K",
+        )
+
+    def test_removes_wrappers_when_attached_to_prompt_text(self):
+        raw = (
+            "Copy prompt 👉 Create a moody editorial portrait\n"
+            "Paste the prompt here: Use soft winter light\n"
+            "PROMPT: A detailed face with natural skin texture\n"
+            "A detailed face, natural skin texture | Save this prompt"
+        )
+        self.assertEqual(
+            clean_extracted_text(raw),
+            "Create a moody editorial portrait\n"
+            "Use soft winter light\n"
+            "A detailed face with natural skin texture\n"
+            "A detailed face, natural skin texture",
+        )
+
+    def test_removes_merged_follow_footer(self):
+        self.assertEqual(clean_extracted_text("Follow me for more"), "")
+
+    def test_worker_stores_raw_and_cleaned_text_and_classifies_cleaned_text(self):
+        extraction = Extraction.objects.create(
+            image=_build_image_file(),
+            original_filename='prompt.png',
+            file_size=1,
+            content_type='image/png',
+            status=Extraction.Status.QUEUED,
+            message='Image received. OCR job queued.',
+        )
+        raw = 'Cinematic portrait, 35mm lens\nFollow @creator\nLike & Share'
+        with patch('api.tasks.extract_prompt_text_from_path', return_value=raw):
+            status = process_extraction_job(str(extraction.id))
+
+        extraction.refresh_from_db()
+        self.assertEqual(status, Extraction.Status.COMPLETED)
+        self.assertEqual(extraction.raw_ocr_text, raw)
+        self.assertEqual(extraction.extracted_text, 'Cinematic portrait, 35mm lens')
+        self.assertEqual(extraction.classification_label, 'prompt')
+
+
+class OCRLayoutSelectionTests(SimpleTestCase):
+    def test_normalized_ocr_lines_retain_boxes_and_scores(self):
+        lines = _normalize_ocr_result(
+            [{
+                'rec_texts': ['PROMPT:', 'A cinematic portrait'],
+                'rec_scores': [0.99, 0.95],
+                'rec_boxes': [[30, 80, 220, 115], [30, 160, 600, 190]],
+            }],
+            image_height=875,
+        )
+
+        self.assertEqual([line.text for line in lines], ['PROMPT:', 'A cinematic portrait'])
+        self.assertEqual(lines[0].box, (30.0, 80.0, 220.0, 115.0))
+        self.assertEqual(lines[1].score, 0.95)
+
+    @patch('api.ocr._embedded_image_regions')
+    def test_anchor_selection_excludes_text_inside_embedded_image(self, mock_regions):
+        mock_regions.return_value = [(260, 444, 632, 817)]
+        lines = [
+            OCRTextLine('PROMPT:', 0.99, (30, 88, 220, 115)),
+            OCRTextLine('Main prompt paragraph', 0.98, (30, 160, 610, 190)),
+            OCRTextLine('Prompt text beside image', 0.97, (30, 450, 240, 480)),
+            OCRTextLine('Bestsellers of the week', 0.96, (286, 520, 450, 600)),
+        ]
+
+        selected = _select_prompt_lines(lines, '/tmp/reference.png')
+
+        self.assertEqual(
+            [line.text for line in selected],
+            ['PROMPT:', 'Main prompt paragraph', 'Prompt text beside image'],
+        )
+
+    @patch('api.ocr._embedded_image_regions', return_value=[])
+    def test_anchorless_selection_keeps_dominant_prompt_block(self, _mock_regions):
+        lines = [
+            OCRTextLine('9:16 vertical, photoreal cyberpunk scene', 0.98, (55, 220, 600, 250)),
+            OCRTextLine('Dense purple fog and cinematic lighting', 0.98, (55, 255, 600, 285)),
+            OCRTextLine('@creator_handle', 0.99, (275, 820, 390, 840)),
+        ]
+
+        selected = _select_prompt_lines(lines, '/tmp/reference.png')
+
+        self.assertEqual(
+            [line.text for line in selected],
+            ['9:16 vertical, photoreal cyberpunk scene', 'Dense purple fog and cinematic lighting'],
+        )
 
 
 class SettingsEnvLoadingTests(SimpleTestCase):
