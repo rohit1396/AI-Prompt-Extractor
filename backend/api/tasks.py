@@ -12,6 +12,7 @@ from .classification import classify_prompt_text, normalize_text
 from .cloudinary import download_remote_file
 from .models import Extraction
 from .ocr import extract_prompt_text_from_path
+from .text_cleaning import clean_extracted_text
 
 logger = logging.getLogger(__name__)
 
@@ -144,11 +145,12 @@ def process_extraction_job(extraction_id: str) -> str:
                         os.remove(temp_path)
                 except OSError:
                     pass
-        normalized_text = normalize_text(extracted_text)
+        raw_ocr_text = extracted_text
+        result_text = clean_extracted_text(raw_ocr_text)
+        normalized_text = normalize_text(result_text)
         classification = classify_prompt_text(normalized_text)
         # OCR is useful even when the classifier is unsure; classification is an
         # assessment of the text, not a reason to discard it.
-        result_text = extracted_text
         message = {
             'prompt': 'Prompt-like text extracted successfully.',
             'not_prompt': 'OCR completed, but the image does not look like a prompt.',
@@ -166,7 +168,7 @@ def process_extraction_job(extraction_id: str) -> str:
                 message=message,
                 error_message='',
                 extracted_text=result_text,
-                raw_ocr_text=extracted_text,
+                raw_ocr_text=raw_ocr_text,
                 classification_label=classification.label,
                 classification_score=classification.score,
                 classification_confidence=classification.confidence,
@@ -187,7 +189,7 @@ def process_extraction_job(extraction_id: str) -> str:
             'Extraction completed extraction_id=%s processing_time_ms=%s text_length=%s classification=%s score=%s confidence=%s',
             extraction_id,
             processing_time_ms,
-            len(extracted_text),
+            len(result_text),
             classification.label,
             classification.score,
             classification.confidence,

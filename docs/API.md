@@ -97,7 +97,9 @@ The response shape matches the POST response, but `status` may be `received`, `q
 
 When OCR finishes successfully:
 
-- `raw_ocr_text` and `extracted_text` contain the OCR output for every completed extraction, including `uncertain` and `not_prompt` classifications
+- `raw_ocr_text` contains the original line-normalized OCR output
+- `extracted_text` contains OCR text selected from the prompt layout, with embedded-image text, prompt headers, copy/paste wrappers, social-media calls to action, swipe/save footer controls, handles/URLs, numbering, and emoji noise removed
+- Classification runs against `extracted_text`, and both fields are populated for `uncertain` and `not_prompt` classifications
 - `is_prompt` is `true` when the classifier believes the text is prompt-like
 - `prompt_confidence` is the prompt-evidence coverage (0–99), not a machine-learning probability
 - `classification_label` is `prompt`, `not_prompt`, or `uncertain`
