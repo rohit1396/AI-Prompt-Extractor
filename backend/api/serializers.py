@@ -29,6 +29,10 @@ class ExtractionResponseSerializer(serializers.Serializer):
     storage_provider = serializers.CharField(required=False)
     cloudinary_public_id = serializers.CharField(allow_blank=True, required=False)
     extracted_text = serializers.CharField()
+    optimized_prompt = serializers.CharField(required=False, allow_blank=True)
+    optimizer_template = serializers.CharField(required=False, allow_blank=True)
+    optimizer_components = serializers.JSONField(required=False)
+    optimizer_version = serializers.CharField(required=False, allow_blank=True)
     is_prompt = serializers.BooleanField(required=False)
     prompt_confidence = serializers.IntegerField(allow_null=True, required=False)
     raw_ocr_text = serializers.CharField(required=False)
@@ -52,6 +56,7 @@ class ExtractionHistorySerializer(serializers.Serializer):
     file_size = serializers.IntegerField()
     image_url = serializers.CharField(allow_blank=True)
     storage_provider = serializers.CharField()
+    optimizer_template = serializers.CharField(allow_blank=True)
     classification_label = serializers.CharField(allow_blank=True)
     classification_score = serializers.IntegerField(allow_null=True)
     classification_confidence = serializers.IntegerField(allow_null=True)
@@ -75,6 +80,10 @@ class ExtractionRecordSerializer(serializers.ModelSerializer):
             'cloudinary_public_id',
             'cloudinary_secure_url',
             'extracted_text',
+            'optimized_prompt',
+            'optimizer_template',
+            'optimizer_components',
+            'optimizer_version',
             'is_prompt',
             'prompt_confidence',
             'raw_ocr_text',

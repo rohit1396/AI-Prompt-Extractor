@@ -8,6 +8,10 @@ export type ExtractionRecord = {
   storage_provider?: 'local' | 'cloudinary'
   cloudinary_public_id?: string
   extracted_text: string
+  optimized_prompt?: string
+  optimizer_template?: string
+  optimizer_components?: Record<string, string[]>
+  optimizer_version?: string
   is_prompt?: boolean
   prompt_confidence?: number | null
   raw_ocr_text?: string

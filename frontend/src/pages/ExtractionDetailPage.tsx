@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { Navbar } from '../components/home/Navbar'
+import { PromptComparison } from '../components/PromptComparison'
 import { fetchExtraction, type ExtractionRecord } from '../api/extractions'
 
 const POLL_INTERVAL_MS = 2000
@@ -91,7 +92,7 @@ export function ExtractionDetailPage() {
 
   const positiveSignals = record?.matched_signals?.filter((signal) => signal.polarity === 'positive') ?? []
   const negativeSignals = record?.matched_signals?.filter((signal) => signal.polarity === 'negative') ?? []
-  const displayText = record?.extracted_text?.trim() || record?.raw_ocr_text?.trim() || 'No readable OCR text was detected in this image.'
+  const displayText = record?.extracted_text?.trim() || 'No cleaned prompt text was detected in this image.'
 
   return (
     <main className="min-h-screen bg-[#fafafa] text-slate-700">
@@ -131,7 +132,18 @@ export function ExtractionDetailPage() {
               </div>
 
               <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Extracted OCR text</h2>
+                {record.classification_label !== 'not_prompt' ? (
+                  <PromptComparison
+                    extractedText={record.extracted_text || ''}
+                    optimizedPrompt={record.optimized_prompt}
+                    template={record.optimizer_template}
+                    components={record.optimizer_components}
+                  />
+                ) : null}
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+                <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Cleaned extracted text</h2>
                 <div className="mt-3 whitespace-pre-wrap rounded-2xl bg-slate-950 px-4 py-4 text-sm leading-6 text-slate-100">{displayText}</div>
               </section>
 
