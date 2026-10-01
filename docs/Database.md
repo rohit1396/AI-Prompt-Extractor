@@ -19,7 +19,14 @@ The `Extraction` model stores the first durable record for the app:
 - `file_size`: bytes
 - `content_type`: image MIME type
 - `status`: `received`, `queued`, `processing`, `completed`, `failed`
-- `extracted_text`: OCR output
+- `extracted_text`: cleaned OCR output used by classification and optimization
+- `optimized_prompt`: deterministic rule-based prompt restructuring
+- `optimizer_template`: selected optimizer template
+- `optimizer_components`: JSON component breakdown used to build the optimized prompt
+- `optimizer_version`: optimizer ruleset version
+- `raw_ocr_text`: line-normalized OCR output before prompt cleanup
+- `classification_label`: `prompt`, `not_prompt`, or `uncertain`
+- `matched_signals`: JSON list of classifier signals
 - `message`: user-facing status message
 - `error_message`: backend error detail
 - `processing_time_ms`: total processing duration

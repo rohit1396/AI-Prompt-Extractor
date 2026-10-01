@@ -50,6 +50,16 @@ _EMOJI_RE = re.compile(
     "]+",
     re.UNICODE,
 )
+_RELATIVE_TIME_RE = r'(?:just\s+now|now|\d+(?:\.\d+)?\s*(?:s|sec(?:onds?)?|m|min(?:utes?)?|h|hr(?:s)?|hours?|d|days?|w|wk(?:s)?|weeks?|mo|months?|y|yr(?:s)?|years?)(?:\s+ago)?)'
+_USERNAME_RE = r'@?[a-z][a-z0-9_.-]{2,31}'
+_METADATA_LINE_RE = re.compile(
+    rf'^(?:{_USERNAME_RE}\s*[-·|,:]?\s*{_RELATIVE_TIME_RE})$'
+    rf'|^(?:{_RELATIVE_TIME_RE})$'
+    rf'|^(?:\d{{1,2}}:\d{{2}}\s*(?:am|pm)?)$'
+    rf'|^(?:\d{{1,2}}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(?:\s+\d{{4}})?(?:\s+\d{{1,2}}:\d{{2}}\s*(?:am|pm)?)?)$'
+    rf'|^(?:\d+(?:\.\d+)?\s*[kmb]?\s+(?:likes?|comments?|views?|shares?|followers?))$',
+    re.IGNORECASE,
+)
 
 
 def _without_emoji(value: str) -> str:
@@ -76,6 +86,8 @@ def _is_noise_line(line: str) -> bool:
     if _CTA_RE.fullmatch(normalized):
         return True
     if _URL_RE.fullmatch(normalized) or _HANDLE_RE.fullmatch(normalized) or _HASHTAG_RE.fullmatch(normalized):
+        return True
+    if _METADATA_LINE_RE.fullmatch(normalized):
         return True
 
     # CTA lines that append only a handle, URL, or hashtag are still noise.

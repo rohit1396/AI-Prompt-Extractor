@@ -36,6 +36,10 @@ class Extraction(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.RECEIVED)
     extracted_text = models.TextField(blank=True, default='')
     raw_ocr_text = models.TextField(blank=True, default='')
+    optimized_prompt = models.TextField(blank=True, default='')
+    optimizer_template = models.CharField(max_length=30, blank=True, default='')
+    optimizer_components = models.JSONField(default=dict, blank=True)
+    optimizer_version = models.CharField(max_length=30, blank=True, default='')
     classification_label = models.CharField(
         max_length=20,
         choices=ClassificationLabel.choices,

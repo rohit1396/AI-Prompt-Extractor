@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { ExtractionSession } from '../context/ExtractionSessionContext'
 import { Navbar } from '../components/home/Navbar'
+import { PromptComparison } from '../components/PromptComparison'
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -71,8 +72,8 @@ export function ImageProcessingPage({
   const isFailed = session.status === 'failed'
   const classificationLabel = session.response?.classification_label
   const extractedText = session.response?.extracted_text.trim()
-  const rawOcrText = session.response?.raw_ocr_text?.trim() ?? ''
   const matchedSignals = session.response?.matched_signals ?? []
+  const optimizerComponents = session.response?.optimizer_components
   const backendStatus = session.response?.status ?? (session.status === 'error' ? 'error' : 'queued')
   const classificationTitle =
     classificationLabel === 'prompt'
@@ -178,10 +179,18 @@ export function ImageProcessingPage({
                   </div>
 
                   <div className="mt-5 space-y-4">
+                    {classificationLabel !== 'not_prompt' ? (
+                      <PromptComparison
+                        extractedText={extractedText ?? ''}
+                        optimizedPrompt={session.response?.optimized_prompt}
+                        template={session.response?.optimizer_template}
+                        components={optimizerComponents}
+                      />
+                    ) : null}
                     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
-                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Extracted OCR text</div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Cleaned extracted text</div>
                       <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-950 px-4 py-4 text-sm leading-6 whitespace-pre-wrap text-slate-100">
-                        {extractedText || rawOcrText || 'No readable OCR text was detected in this image.'}
+                        {extractedText || 'No cleaned prompt text was detected in this image.'}
                       </div>
                     </div>
 

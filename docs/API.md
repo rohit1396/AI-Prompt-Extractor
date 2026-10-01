@@ -32,6 +32,10 @@ text from ordinary text.
   "storage_provider": "cloudinary",
   "cloudinary_public_id": "promptlens/extractions/...",
   "extracted_text": "",
+  "optimized_prompt": "",
+  "optimizer_template": "",
+  "optimizer_components": {},
+  "optimizer_version": "",
   "is_prompt": false,
   "prompt_confidence": null,
   "raw_ocr_text": "",
@@ -97,13 +101,20 @@ The response shape matches the POST response, but `status` may be `received`, `q
 
 When OCR finishes successfully:
 
-- `raw_ocr_text` contains the original line-normalized OCR output
+- `raw_ocr_text` contains the original line-normalized OCR output for diagnostics and may contain screenshot metadata noise
 - `extracted_text` contains OCR text selected from the prompt layout, with embedded-image text, prompt headers, copy/paste wrappers, social-media calls to action, swipe/save footer controls, handles/URLs, numbering, and emoji noise removed
 - Classification runs against `extracted_text`, and both fields are populated for `uncertain` and `not_prompt` classifications
 - `is_prompt` is `true` when the classifier believes the text is prompt-like
 - `prompt_confidence` is the prompt-evidence coverage (0–99), not a machine-learning probability
 - `classification_label` is `prompt`, `not_prompt`, or `uncertain`
 - `matched_signals` lists the weighted signals that contributed to the score
+- `optimized_prompt` is a deterministic, rule-based restructuring of prompt-like
+  or uncertain extracted text. It is empty for `not_prompt` results.
+- `optimizer_template` is the selected `generic`, `portrait`, `landscape`,
+  `character`, or `product` template.
+- `optimizer_components` contains the detected semantic fields used to build the
+  optimized prompt. No missing fields are invented.
+- `optimizer_version` identifies the deterministic optimizer ruleset.
 
 ## GET `/api/v1/extractions/history/`
 
@@ -135,6 +146,7 @@ Returns a newest-first, paginated summary of all extraction attempts. The endpoi
       "classification_label": "prompt",
       "classification_score": 12,
       "classification_confidence": 63,
+      "optimizer_template": "portrait",
       "message": "Prompt-like text extracted successfully.",
       "error_message": "",
       "processing_time_ms": 820,

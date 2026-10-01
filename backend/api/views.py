@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from .cloudinary import cloudinary_is_enabled, delete_image_from_cloudinary, upload_image_to_cloudinary
 from .models import Extraction
+from .optimizer import optimize_prompt
 from .serializers import ExtractionHistorySerializer, ExtractionResponseSerializer, ImageUploadSerializer
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,7 @@ class ExtractionHistoryView(APIView):
 
 
 def _serialize_extraction(extraction: Extraction) -> dict[str, object]:
+    _backfill_optimizer_if_needed(extraction)
     image_url = extraction.cloudinary_secure_url
     if not image_url and extraction.image:
         try:
@@ -154,6 +156,10 @@ def _serialize_extraction(extraction: Extraction) -> dict[str, object]:
         'storage_provider': extraction.storage_provider,
         'cloudinary_public_id': extraction.cloudinary_public_id,
         'extracted_text': extraction.extracted_text,
+        'optimized_prompt': extraction.optimized_prompt,
+        'optimizer_template': extraction.optimizer_template,
+        'optimizer_components': extraction.optimizer_components,
+        'optimizer_version': extraction.optimizer_version,
         'is_prompt': extraction.classification_label == Extraction.ClassificationLabel.PROMPT,
         'prompt_confidence': extraction.classification_confidence,
         'raw_ocr_text': extraction.raw_ocr_text,
@@ -170,6 +176,32 @@ def _serialize_extraction(extraction: Extraction) -> dict[str, object]:
     }
 
 
+def _backfill_optimizer_if_needed(extraction: Extraction) -> None:
+    """Populate optimizer fields for completed rows created before v2 existed."""
+    if (
+        extraction.status != Extraction.Status.COMPLETED
+        or not extraction.extracted_text.strip()
+        or extraction.classification_label == Extraction.ClassificationLabel.NOT_PROMPT
+        or extraction.optimized_prompt.strip()
+    ):
+        return
+
+    result = optimize_prompt(extraction.extracted_text, extraction.matched_signals)
+    extraction.optimized_prompt = result.optimized_prompt
+    extraction.optimizer_template = result.template
+    extraction.optimizer_components = result.components
+    extraction.optimizer_version = result.optimizer_version
+    extraction.save(
+        update_fields=[
+            'optimized_prompt',
+            'optimizer_template',
+            'optimizer_components',
+            'optimizer_version',
+            'updated_at',
+        ],
+    )
+
+
 def _history_payload(extraction: Extraction) -> dict[str, object]:
     payload = _serialize_extraction(extraction)
     return {
@@ -180,6 +212,7 @@ def _history_payload(extraction: Extraction) -> dict[str, object]:
         'file_size': payload['file_size'],
         'image_url': payload['image_url'],
         'storage_provider': payload['storage_provider'],
+        'optimizer_template': extraction.optimizer_template,
         'classification_label': payload['classification_label'],
         'classification_score': payload['classification_score'],
         'classification_confidence': payload['classification_confidence'],

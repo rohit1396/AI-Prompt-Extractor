@@ -12,6 +12,7 @@ from .classification import classify_prompt_text, normalize_text
 from .cloudinary import download_remote_file
 from .models import Extraction
 from .ocr import extract_prompt_text_from_path
+from .optimizer import optimize_prompt
 from .text_cleaning import clean_extracted_text
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,10 @@ def _set_extraction_status(
     error_message: str | None = None,
     extracted_text: str | None = None,
     raw_ocr_text: str | None = None,
+    optimized_prompt: str | None = None,
+    optimizer_template: str | None = None,
+    optimizer_components: dict[str, list[str]] | None = None,
+    optimizer_version: str | None = None,
     classification_label: str | None = None,
     classification_score: int | None = None,
     classification_confidence: int | None = None,
@@ -40,6 +45,14 @@ def _set_extraction_status(
         extraction.extracted_text = extracted_text
     if raw_ocr_text is not None:
         extraction.raw_ocr_text = raw_ocr_text
+    if optimized_prompt is not None:
+        extraction.optimized_prompt = optimized_prompt
+    if optimizer_template is not None:
+        extraction.optimizer_template = optimizer_template
+    if optimizer_components is not None:
+        extraction.optimizer_components = optimizer_components
+    if optimizer_version is not None:
+        extraction.optimizer_version = optimizer_version
     if classification_label is not None:
         extraction.classification_label = classification_label
     if classification_score is not None:
@@ -61,6 +74,10 @@ def _set_extraction_status(
             'error_message',
             'extracted_text',
             'raw_ocr_text',
+            'optimized_prompt',
+            'optimizer_template',
+            'optimizer_components',
+            'optimizer_version',
             'classification_label',
             'classification_score',
             'classification_confidence',
@@ -149,6 +166,10 @@ def process_extraction_job(extraction_id: str) -> str:
         result_text = clean_extracted_text(raw_ocr_text)
         normalized_text = normalize_text(result_text)
         classification = classify_prompt_text(normalized_text)
+        optimization = optimize_prompt(
+            result_text,
+            classification.matched_signals,
+        ) if classification.label != 'not_prompt' else None
         # OCR is useful even when the classifier is unsure; classification is an
         # assessment of the text, not a reason to discard it.
         message = {
@@ -169,6 +190,10 @@ def process_extraction_job(extraction_id: str) -> str:
                 error_message='',
                 extracted_text=result_text,
                 raw_ocr_text=raw_ocr_text,
+                optimized_prompt=optimization.optimized_prompt if optimization else '',
+                optimizer_template=optimization.template if optimization else '',
+                optimizer_components=optimization.components if optimization else {},
+                optimizer_version=optimization.optimizer_version if optimization else '',
                 classification_label=classification.label,
                 classification_score=classification.score,
                 classification_confidence=classification.confidence,
@@ -209,6 +234,10 @@ def process_extraction_job(extraction_id: str) -> str:
                 message='Unable to extract text from the uploaded image.',
                 error_message=error_message,
                 extracted_text='',
+                optimized_prompt='',
+                optimizer_template='',
+                optimizer_components={},
+                optimizer_version='',
                 processing_time_ms=processing_time_ms,
             )
 

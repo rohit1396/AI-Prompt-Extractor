@@ -11,12 +11,14 @@ from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, override_settings
+from django.core.management import call_command
 from PIL import Image
 from rest_framework.test import APITestCase
 
 from .classification import classify_prompt_text
 from .models import Extraction
 from .ocr import OCRTextLine, _normalize_ocr_result, _select_prompt_lines
+from .optimizer import optimize_prompt
 from .tasks import process_extraction_job
 from .text_cleaning import clean_extracted_text
 
@@ -182,6 +184,8 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual(extraction.classification_score, 7)
         self.assertEqual(extraction.classification_confidence, 23)
         self.assertEqual(extraction.message, 'OCR completed, but prompt evidence is limited.')
+        self.assertEqual(extraction.optimizer_template, 'portrait')
+        self.assertIn('cinematic portrait', extraction.optimized_prompt)
         self.assertIsNotNone(extraction.processing_time_ms)
         self.assertEqual(extraction.error_message, '')
 
@@ -200,6 +204,8 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertFalse(extraction.classification_label == 'prompt')
         self.assertEqual(extraction.classification_confidence, 0)
         self.assertEqual(extraction.message, 'OCR completed, but the image does not look like a prompt.')
+        self.assertEqual(extraction.optimized_prompt, '')
+        self.assertEqual(extraction.optimizer_components, {})
         self.assertGreater(len(extraction.matched_signals), 0)
 
     def test_worker_downloads_cloudinary_asset_before_ocr(self):
@@ -244,6 +250,8 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual(response.data['classification_label'], 'prompt')
         self.assertGreater(response.data['prompt_confidence'], 0)
         self.assertEqual(response.data['raw_ocr_text'], 'cinematic portrait, 35mm lens')
+        self.assertIn('optimized_prompt', response.data)
+        self.assertEqual(response.data['optimizer_template'], 'portrait')
         self.assertGreater(len(response.data['matched_signals']), 0)
 
     def test_detail_endpoint_returns_not_found_for_unknown_extraction(self):
@@ -384,7 +392,96 @@ class PromptClassificationTests(SimpleTestCase):
         self.assertFalse(result.matched_signals)
 
 
+class PromptOptimizerTests(APITestCase):
+    def test_optimizer_extracts_components_and_builds_generic_prompt(self):
+        result = optimize_prompt('woman walking in Tokyo at night, neon lights, cinematic, 35mm')
+
+        self.assertEqual(result.template, 'generic')
+        self.assertEqual(result.components['subject'], ['woman'])
+        self.assertEqual(result.components['action'], ['walking'])
+        self.assertEqual(result.components['environment'], ['Tokyo at night'])
+        self.assertEqual(result.components['lighting'], ['neon lights'])
+        self.assertEqual(result.components['camera'], ['35mm lens'])
+        self.assertEqual(
+            result.optimized_prompt,
+            'A cinematic scene of a woman walking through Tokyo at night, illuminated by neon lights, captured with 35mm lens.',
+        )
+
+    def test_optimizer_selects_portrait_template(self):
+        result = optimize_prompt('cinematic portrait of a smiling woman, soft lighting, 50mm')
+
+        self.assertEqual(result.template, 'portrait')
+        self.assertIn('cinematic portrait', result.optimized_prompt)
+        self.assertIn('smiling', result.optimized_prompt)
+        self.assertIn('captured with 50mm lens', result.optimized_prompt)
+
+    def test_optimizer_does_not_invent_missing_components(self):
+        result = optimize_prompt('woman walking in Tokyo')
+
+        self.assertNotIn('highly detailed', result.optimized_prompt)
+        self.assertNotIn('lighting', result.optimized_prompt)
+        self.assertNotIn('captured with', result.optimized_prompt)
+
+    def test_optimizer_accepts_classifier_signal_objects(self):
+        classification = classify_prompt_text('cinematic portrait, 35mm lens, highly detailed')
+        result = optimize_prompt('woman in a studio', classification.matched_signals)
+
+        self.assertEqual(result.components['style'], ['cinematic'])
+        self.assertEqual(result.components['camera'], ['35mm lens'])
+        self.assertEqual(result.components['quality'], ['highly detailed'])
+
+    def test_optimizer_handles_empty_text(self):
+        result = optimize_prompt('')
+
+        self.assertEqual(result.optimized_prompt, '')
+        self.assertEqual(result.components, {})
+
+    def test_optimizer_preserves_unmatched_details_in_long_prompt(self):
+        result = optimize_prompt(
+            'close-up portrait of a man with thick messy hair, a neatly trimmed beard, '
+            'dark sunglasses, and a dark button-up shirt, soft lighting'
+        )
+
+        self.assertEqual(result.template, 'portrait')
+        self.assertIn('thick messy hair', result.optimized_prompt)
+        self.assertIn('dark sunglasses', result.optimized_prompt)
+
+    def test_detail_endpoint_backfills_optimizer_for_legacy_completed_record(self):
+        extraction = Extraction.objects.create(
+            image=_build_image_file(),
+            original_filename='legacy.png',
+            file_size=1,
+            content_type='image/png',
+            status=Extraction.Status.COMPLETED,
+            extracted_text='cinematic portrait of a woman, soft lighting',
+            classification_label='uncertain',
+            matched_signals=[],
+            message='OCR completed, but prompt evidence is limited.',
+        )
+
+        response = self.client.get(f'/api/v1/extractions/{extraction.id}/')
+
+        extraction.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['optimized_prompt'])
+        self.assertEqual(extraction.optimizer_version, 'rule-based-v2')
+
+
 class OCRTextCleaningTests(APITestCase):
+    def test_removes_standalone_username_and_timestamp_metadata(self):
+        raw = """lemonkasha 21h
+@creator 3h
+9:08 PM
+12K likes
+A cinematic portrait of a woman"""
+
+        self.assertEqual(clean_extracted_text(raw), 'A cinematic portrait of a woman')
+
+    def test_preserves_metadata_like_text_inside_prompt_content(self):
+        raw = 'A woman in a 21h neon city scene with 12K lights'
+
+        self.assertEqual(clean_extracted_text(raw), raw)
+
     def test_removes_wrappers_social_footer_and_numbering(self):
         raw = """1. Here's the prompt
 Cinematic portrait of a woman
@@ -453,7 +550,7 @@ SWIPE <<<
             status=Extraction.Status.QUEUED,
             message='Image received. OCR job queued.',
         )
-        raw = 'Cinematic portrait, 35mm lens\nFollow @creator\nLike & Share'
+        raw = 'lemonkasha 21h\nCinematic portrait, 35mm lens\nFollow @creator\nLike & Share'
         with patch('api.tasks.extract_prompt_text_from_path', return_value=raw):
             status = process_extraction_job(str(extraction.id))
 
@@ -462,6 +559,24 @@ SWIPE <<<
         self.assertEqual(extraction.raw_ocr_text, raw)
         self.assertEqual(extraction.extracted_text, 'Cinematic portrait, 35mm lens')
         self.assertEqual(extraction.classification_label, 'prompt')
+
+    def test_cleanup_backfill_command_repairs_existing_record(self):
+        extraction = Extraction.objects.create(
+            image=_build_image_file(),
+            original_filename='legacy-noise.png',
+            file_size=1,
+            content_type='image/png',
+            status=Extraction.Status.COMPLETED,
+            raw_ocr_text='lemonkasha 21h\nCinematic portrait of a woman',
+            extracted_text='lemonkasha 21h\nCinematic portrait of a woman',
+            classification_label='uncertain',
+        )
+
+        call_command('backfill_extraction_cleanup')
+
+        extraction.refresh_from_db()
+        self.assertEqual(extraction.extracted_text, 'Cinematic portrait of a woman')
+        self.assertNotIn('lemonkasha', extraction.optimized_prompt)
 
 
 class OCRLayoutSelectionTests(SimpleTestCase):
