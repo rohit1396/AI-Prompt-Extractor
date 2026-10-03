@@ -49,6 +49,7 @@ function DetailStatus({ record }: { record: ExtractionRecord }) {
 export function ExtractionDetailPage() {
   const { extractionId } = useParams()
   const [searchParams] = useSearchParams()
+  const fromHistory = searchParams.get('from') === 'history'
   const historyPage = Number(searchParams.get('page')) > 1 ? searchParams.get('page') : null
   const historyUrl = historyPage ? `/history?page=${historyPage}` : '/history'
   const [record, setRecord] = useState<ExtractionRecord | null>(null)
@@ -98,7 +99,7 @@ export function ExtractionDetailPage() {
     <main className="min-h-screen bg-[#fafafa] text-slate-700">
       <Navbar />
       <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <Link to={historyUrl} className="text-sm font-medium text-blue-600 hover:text-blue-800">← Back to history</Link>
+        {fromHistory ? <Link to={historyUrl} className="text-sm font-medium text-blue-600 hover:text-blue-800">← Back to history</Link> : null}
         <div className="mt-5">
           {loading ? <div className="rounded-2xl border border-slate-200 bg-white px-5 py-16 text-center text-sm text-slate-500">Loading extraction...</div> : null}
           {error ? (
