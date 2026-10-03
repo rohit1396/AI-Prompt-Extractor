@@ -36,7 +36,7 @@ function classificationText(record: ExtractionRecord) {
 
 function HistoryCard({ record, page }: { record: ExtractionRecord; page: number }) {
   return (
-    <Link to={`/history/${record.id}?page=${page}`} className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+    <Link to={`/result/${record.id}?from=history&page=${page}`} className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
       <article className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md sm:flex-row sm:items-center">
       <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
         {record.image_url ? (
