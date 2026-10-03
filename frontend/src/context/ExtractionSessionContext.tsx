@@ -20,7 +20,7 @@ export type ExtractionSession = {
 
 type ExtractionSessionContextValue = {
   session: ExtractionSession | null
-  startExtraction: (file: File) => void
+  startExtraction: (file: File) => Promise<ExtractionRecord>
   resetSession: () => void
 }
 
@@ -178,7 +178,7 @@ export function ExtractionSessionProvider({ children }: { children: ReactNode })
     [clearPollTimer],
   )
 
-  const startExtraction = useCallback((file: File) => {
+  const startExtraction = useCallback(async (file: File) => {
     activeRequestRef.current += 1
     const requestId = activeRequestRef.current
     clearPollTimer()
@@ -199,10 +199,9 @@ export function ExtractionSessionProvider({ children }: { children: ReactNode })
       checklist: buildChecklistForStatus('received'),
     })
 
-    void (async () => {
-      try {
-        const response = await uploadExtractionImage(file)
-        if (activeRequestRef.current !== requestId) return
+    try {
+      const response = await uploadExtractionImage(file)
+      if (activeRequestRef.current !== requestId) return response
 
         if (response.status === 'completed') {
           clearPollTimer()
@@ -217,7 +216,7 @@ export function ExtractionSessionProvider({ children }: { children: ReactNode })
                 }
               : current,
           )
-          return
+          return response
         }
 
         if (response.status === 'failed') {
@@ -233,7 +232,7 @@ export function ExtractionSessionProvider({ children }: { children: ReactNode })
                 }
               : current,
           )
-          return
+          return response
         }
 
         setSession((current) =>
@@ -248,23 +247,24 @@ export function ExtractionSessionProvider({ children }: { children: ReactNode })
             : current,
         )
         schedulePoll(requestId, response.id)
-      } catch (error) {
-        if (activeRequestRef.current !== requestId) return
+      return response
+    } catch (error) {
+      if (activeRequestRef.current !== requestId) throw error
 
-        clearPollTimer()
-        setSession((current) =>
-          current
-            ? {
-                ...current,
-                status: 'error',
-                response: null,
-                error: error instanceof Error ? error.message : 'Upload failed. Please try again.',
-                checklist: buildChecklistForStatus(null),
-              }
-            : current,
-        )
-      }
-    })()
+      clearPollTimer()
+      setSession((current) =>
+        current
+          ? {
+              ...current,
+              status: 'error',
+              response: null,
+              error: error instanceof Error ? error.message : 'Upload failed. Please try again.',
+              checklist: buildChecklistForStatus(null),
+            }
+          : current,
+      )
+      throw error
+    }
   }, [clearPollTimer, schedulePoll])
 
   const value = useMemo(

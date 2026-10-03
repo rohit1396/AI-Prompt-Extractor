@@ -100,8 +100,12 @@ export function UploadCard() {
     setErrorMessage(null)
     clearSubmitTimer()
     submitTimerRef.current = window.setTimeout(() => {
-      startExtraction(selected.file)
-      navigate('/imageprocessing')
+      void startExtraction(selected.file)
+        .then((response) => navigate(`/imageprocessing/${response.id}`))
+        .catch(() => {
+          setState('error')
+          setErrorMessage('Upload failed. Please try again.')
+        })
     }, 250)
   }, [clearSubmitTimer, navigate, selected, startExtraction, state])
 
