@@ -97,11 +97,11 @@ class ExtractionUploadView(APIView):
                 update_fields=['status', 'message', 'error_message', 'updated_at'],
             )
 
-            payload = _serialize_extraction(extraction)
+            payload = _serialize_extraction(extraction, request=request)
             response_serializer = ExtractionResponseSerializer(payload)
             return Response(response_serializer.data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        payload = _serialize_extraction(extraction)
+        payload = _serialize_extraction(extraction, request=request)
         response_serializer = ExtractionResponseSerializer(payload)
         logger.info(
             'STEP 3: upload accepted extraction_id=%s status_code=%s',
@@ -114,7 +114,7 @@ class ExtractionUploadView(APIView):
 class ExtractionDetailView(APIView):
     def get(self, request, extraction_id):
         extraction = get_object_or_404(Extraction, pk=extraction_id)
-        payload = _serialize_extraction(extraction)
+        payload = _serialize_extraction(extraction, request=request)
         response_serializer = ExtractionResponseSerializer(payload)
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 
@@ -131,13 +131,20 @@ class ExtractionHistoryView(APIView):
         paginator = ExtractionHistoryPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = ExtractionHistorySerializer(
-            [_history_payload(extraction) for extraction in page],
+            [_history_payload(extraction, request=request) for extraction in page],
             many=True,
         )
         return paginator.get_paginated_response(serializer.data)
 
 
-def _serialize_extraction(extraction: Extraction) -> dict[str, object]:
+def _prompt_preview(text: str, max_length: int = 75) -> str:
+    normalized = ' '.join((text or '').split())
+    if len(normalized) <= max_length:
+        return normalized
+    return f'{normalized[:max_length - 1].rstrip()}…'
+
+
+def _serialize_extraction(extraction: Extraction, *, request=None) -> dict[str, object]:
     _backfill_optimizer_if_needed(extraction)
     image_url = extraction.cloudinary_secure_url
     if not image_url and extraction.image:
@@ -145,6 +152,8 @@ def _serialize_extraction(extraction: Extraction) -> dict[str, object]:
             image_url = extraction.image.url
         except Exception:
             image_url = ''
+    if image_url and request is not None:
+        image_url = request.build_absolute_uri(image_url)
 
     return {
         'id': str(extraction.id),
@@ -156,6 +165,7 @@ def _serialize_extraction(extraction: Extraction) -> dict[str, object]:
         'storage_provider': extraction.storage_provider,
         'cloudinary_public_id': extraction.cloudinary_public_id,
         'extracted_text': extraction.extracted_text,
+        'prompt_preview': _prompt_preview(extraction.extracted_text),
         'optimized_prompt': extraction.optimized_prompt,
         'optimizer_template': extraction.optimizer_template,
         'optimizer_components': extraction.optimizer_components,
@@ -202,8 +212,8 @@ def _backfill_optimizer_if_needed(extraction: Extraction) -> None:
     )
 
 
-def _history_payload(extraction: Extraction) -> dict[str, object]:
-    payload = _serialize_extraction(extraction)
+def _history_payload(extraction: Extraction, *, request=None) -> dict[str, object]:
+    payload = _serialize_extraction(extraction, request=request)
     return {
         'id': extraction.id,
         'status': payload['status'],
@@ -211,6 +221,7 @@ def _history_payload(extraction: Extraction) -> dict[str, object]:
         'content_type': payload['content_type'],
         'file_size': payload['file_size'],
         'image_url': payload['image_url'],
+        'prompt_preview': payload['prompt_preview'],
         'storage_provider': payload['storage_provider'],
         'optimizer_template': extraction.optimizer_template,
         'classification_label': payload['classification_label'],
