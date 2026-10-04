@@ -5,6 +5,7 @@ export type ExtractionRecord = {
   content_type: string
   file_size?: number
   image_url?: string
+  prompt_preview?: string
   storage_provider?: 'local' | 'cloudinary'
   cloudinary_public_id?: string
   extracted_text: string

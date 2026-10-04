@@ -34,23 +34,48 @@ function classificationText(record: ExtractionRecord) {
   return 'Not classified'
 }
 
+function isLowEvidenceResult(record: ExtractionRecord) {
+  if (record.classification_label === 'not_prompt') return true
+  if (record.classification_label !== 'uncertain') return false
+
+  const score = record.classification_score ?? 0
+  const confidence = record.classification_confidence ?? 0
+  return score < 10 || confidence < 30
+}
+
 function HistoryCard({ record, page }: { record: ExtractionRecord; page: number }) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const lowEvidence = isLowEvidenceResult(record)
+  const failedPrompt = record.status === 'failed' || lowEvidence
+  const title = !failedPrompt && record.prompt_preview?.trim() ? record.prompt_preview : record.filename
+
   return (
     <Link to={`/result/${record.id}?from=history&page=${page}`} className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
       <article className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 hover:shadow-md sm:flex-row sm:items-center">
       <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-        {record.image_url ? (
-          <img src={record.image_url} alt={record.filename} className="h-full w-full object-cover" />
+        {record.image_url && !imageFailed ? (
+          <img
+            src={record.image_url}
+            alt={record.filename}
+            onError={() => setImageFailed(true)}
+            className="h-full w-full object-cover"
+          />
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-slate-400">No preview</div>
+          <div className="flex h-full flex-col items-center justify-center gap-1 px-2 text-center text-xs text-slate-400">
+            <span aria-hidden="true">▧</span>
+            <span>Preview unavailable</span>
+          </div>
         )}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="truncate font-semibold text-slate-950">{record.filename}</h2>
+          <h2 className="truncate font-semibold text-slate-950" title={title}>{title}</h2>
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle(record.status)}`}>
             {record.status}
           </span>
+          {failedPrompt && record.status !== 'failed' ? (
+            <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">No prompt detected</span>
+          ) : null}
         </div>
         <div className="mt-1 text-sm text-slate-500">
           {formatDate(record.created_at)} · {formatFileSize(record.file_size)}

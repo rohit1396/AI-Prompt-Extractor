@@ -31,6 +31,15 @@ function classificationStyle(label?: string) {
   return 'bg-slate-100 text-slate-600'
 }
 
+function isLowEvidenceResult(record: ExtractionRecord) {
+  if (record.classification_label === 'not_prompt') return true
+  if (record.classification_label !== 'uncertain') return false
+
+  const score = record.classification_score ?? 0
+  const confidence = record.classification_confidence ?? 0
+  return score < 10 || confidence < 30
+}
+
 function DetailStatus({ record }: { record: ExtractionRecord }) {
   const active = record.status === 'received' || record.status === 'queued' || record.status === 'processing'
   return (
@@ -94,6 +103,7 @@ export function ExtractionDetailPage() {
   const positiveSignals = record?.matched_signals?.filter((signal) => signal.polarity === 'positive') ?? []
   const negativeSignals = record?.matched_signals?.filter((signal) => signal.polarity === 'negative') ?? []
   const displayText = record?.extracted_text?.trim() || 'No cleaned prompt text was detected in this image.'
+  const lowEvidence = record ? isLowEvidenceResult(record) : false
 
   return (
     <main className="min-h-screen bg-[#fafafa] text-slate-700">
@@ -132,42 +142,88 @@ export function ExtractionDetailPage() {
                 </div>
               </div>
 
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-                {record.classification_label !== 'not_prompt' ? (
-                  <PromptComparison
-                    extractedText={record.extracted_text || ''}
-                    optimizedPrompt={record.optimized_prompt}
-                    template={record.optimizer_template}
-                    components={record.optimizer_components}
-                  />
-                ) : null}
-              </section>
-
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Cleaned extracted text</h2>
-                <div className="mt-3 whitespace-pre-wrap rounded-2xl bg-slate-950 px-4 py-4 text-sm leading-6 text-slate-100">{displayText}</div>
-              </section>
-
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Matched signals</h2>
-                {positiveSignals.length === 0 && negativeSignals.length === 0 ? <p className="mt-3 text-sm text-slate-500">No weighted signals were matched.</p> : (
-                  <div className="mt-4 grid gap-5 md:grid-cols-2">
-                    {[['Positive signals', positiveSignals, 'emerald'], ['Negative signals', negativeSignals, 'rose']].map(([title, signals, tone]) => (
-                      <div key={title as string}>
-                        <h3 className={`text-sm font-semibold ${tone === 'emerald' ? 'text-emerald-700' : 'text-rose-700'}`}>{title as string}</h3>
-                        <div className="mt-2 space-y-2">
-                          {(signals as NonNullable<ExtractionRecord['matched_signals']>).map((signal) => (
-                            <div key={`${signal.polarity}-${signal.text}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                              <span className="min-w-0 truncate text-slate-700">{signal.text} <span className="text-xs text-slate-400">· {signal.category}</span></span>
-                              <span className="shrink-0 font-semibold text-slate-700">{signal.weight > 0 ? '+' : ''}{signal.weight}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+              {lowEvidence ? (
+                <section className="rounded-2xl border border-rose-200 bg-rose-50 p-5 sm:p-7">
+                  <div className="mx-auto max-w-2xl text-center">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-700" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none">
+                        <path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                        <path d="M15.5 3.5h5v5M16 8l4.5-4.5M8.5 10.25h.01M15.5 10.25h.01M9.5 15.5c1.4-1.3 3.6-1.3 5 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <h2 className="mt-4 text-xl font-semibold text-rose-900">No AI prompt detected</h2>
+                    <p className="mt-2 text-sm leading-6 text-rose-800">
+                      This image does not appear to contain a readable AI generation prompt.
+                      Try a screenshot where the prompt text is clearly visible.
+                    </p>
+                    <p className="mt-3 text-sm font-medium text-rose-800">
+                      Confidence: {record.classification_confidence ?? 0}%
+                      {record.classification_score != null ? ` · Score: ${record.classification_score}` : ''}
+                    </p>
+                    <Link
+                      to="/#extract"
+                      className="mt-5 inline-flex rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-900 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 focus-visible:ring-offset-rose-50"
+                    >
+                      Try a different image
+                    </Link>
                   </div>
-                )}
-              </section>
+
+                  <div className="mx-auto mt-8 grid max-w-3xl gap-5 border-t border-rose-200 pt-6 text-left sm:grid-cols-2">
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-900">What counts as a prompt?</h3>
+                      <ul className="mt-3 space-y-2 text-sm leading-6 text-rose-900">
+                        <li className="flex gap-2"><span className="text-emerald-700" aria-hidden="true">✓</span><span>Midjourney or Stable Diffusion output with the prompt visible</span></li>
+                        <li className="flex gap-2"><span className="text-emerald-700" aria-hidden="true">✓</span><span>X or Reddit screenshots sharing AI prompts</span></li>
+                        <li className="flex gap-2"><span className="text-emerald-700" aria-hidden="true">✓</span><span>Pinterest or Instagram posts with prompts in captions</span></li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-900">Try to avoid</h3>
+                      <ul className="mt-3 space-y-2 text-sm leading-6 text-rose-900">
+                        <li className="flex gap-2"><span className="text-rose-700" aria-hidden="true">×</span><span>General photos or landscapes without prompt text</span></li>
+                        <li className="flex gap-2"><span className="text-rose-700" aria-hidden="true">×</span><span>Documents, quotes, meeting notes, or terminal output</span></li>
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+              ) : (
+                <>
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+                    <PromptComparison
+                      extractedText={record.extracted_text || ''}
+                      optimizedPrompt={record.optimized_prompt}
+                      template={record.optimizer_template}
+                      components={record.optimizer_components}
+                    />
+                  </section>
+
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+                    <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Cleaned extracted text</h2>
+                    <div className="mt-3 whitespace-pre-wrap rounded-2xl bg-slate-950 px-4 py-4 text-sm leading-6 text-slate-100">{displayText}</div>
+                  </section>
+
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+                    <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Matched signals</h2>
+                    {positiveSignals.length === 0 && negativeSignals.length === 0 ? <p className="mt-3 text-sm text-slate-500">No weighted signals were matched.</p> : (
+                      <div className="mt-4 grid gap-5 md:grid-cols-2">
+                        {[['Positive signals', positiveSignals, 'emerald'], ['Negative signals', negativeSignals, 'rose']].map(([title, signals, tone]) => (
+                          <div key={title as string}>
+                            <h3 className={`text-sm font-semibold ${tone === 'emerald' ? 'text-emerald-700' : 'text-rose-700'}`}>{title as string}</h3>
+                            <div className="mt-2 space-y-2">
+                              {(signals as NonNullable<ExtractionRecord['matched_signals']>).map((signal) => (
+                                <div key={`${signal.polarity}-${signal.text}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                                  <span className="min-w-0 truncate text-slate-700">{signal.text} <span className="text-xs text-slate-400">· {signal.category}</span></span>
+                                  <span className="shrink-0 font-semibold text-slate-700">{signal.weight > 0 ? '+' : ''}{signal.weight}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
             </div>
           ) : null}
         </div>

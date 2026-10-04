@@ -263,7 +263,12 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         older = self._create_queued_extraction()
         newer = self._create_queued_extraction()
         Extraction.objects.filter(pk=older.pk).update(original_filename='older.png')
-        Extraction.objects.filter(pk=newer.pk).update(original_filename='newer.png')
+        Extraction.objects.filter(pk=newer.pk).update(
+            original_filename='newer.png',
+            status=Extraction.Status.COMPLETED,
+            classification_label=Extraction.ClassificationLabel.PROMPT,
+            extracted_text='A cinematic portrait of a traveler in a rain-soaked neon city, dramatic lighting, highly detailed, 35mm lens, atmospheric depth',
+        )
 
         response = self.client.get('/api/v1/extractions/history/')
 
@@ -272,6 +277,12 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual([item['filename'] for item in response.data['results']], ['newer.png', 'older.png'])
         self.assertNotIn('extracted_text', response.data['results'][0])
         self.assertIn('classification_score', response.data['results'][0])
+        self.assertEqual(
+            response.data['results'][0]['prompt_preview'],
+            'A cinematic portrait of a traveler in a rain-soaked neon city, dramatic li…',
+        )
+        self.assertTrue(response.data['results'][0]['image_url'].startswith('http://testserver/media/'))
+        self.assertEqual(response.data['results'][1]['prompt_preview'], '')
 
     def test_history_endpoint_paginates_and_includes_all_statuses(self):
         for index, extraction_status in enumerate(
