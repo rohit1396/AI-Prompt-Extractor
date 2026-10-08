@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 
 from .cloudinary import cloudinary_is_enabled, delete_image_from_cloudinary, upload_image_to_cloudinary
 from .models import Extraction, GoogleIdentity
+from .observability import capture_exception
 from .optimizer import optimize_prompt
 from .serializers import ExtractionHistorySerializer, ExtractionResponseSerializer, ImageUploadSerializer, UserSerializer
 
@@ -122,6 +123,7 @@ class ExtractionUploadView(APIView):
             try:
                 cloudinary_upload = upload_image_to_cloudinary(image)
             except Exception as exc:
+                capture_exception(exc, operation='cloudinary_upload', user=request.user)
                 logger.exception('Failed to upload image to Cloudinary')
                 return Response(
                     {
@@ -149,9 +151,15 @@ class ExtractionUploadView(APIView):
                     status=Extraction.Status.RECEIVED,
                     message='Image received.',
                 )
-        except Exception:
+        except Exception as exc:
             if cloudinary_upload:
                 delete_image_from_cloudinary(cloudinary_upload.public_id)
+            capture_exception(
+                exc,
+                operation='extraction_persistence',
+                user=request.user,
+                tags={'storage_provider': 'cloudinary' if cloudinary_upload else 'local'},
+            )
             logger.exception('Failed to persist extraction record')
             return Response(
                 {
@@ -179,6 +187,11 @@ class ExtractionUploadView(APIView):
 
             transaction.on_commit(lambda: process_extraction.delay(str(extraction.id)))
         except Exception as exc:
+            capture_exception(
+                exc,
+                operation='extraction_queueing',
+                extraction=extraction,
+            )
             logger.exception('Failed to queue extraction_id=%s', extraction.id)
             extraction.status = Extraction.Status.FAILED
             extraction.message = 'Unable to queue the OCR job.'

@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { Navbar } from '../components/home/Navbar'
 import { PromptComparison } from '../components/PromptComparison'
 import { fetchExtraction, type ExtractionRecord } from '../api/extractions'
+import { captureFrontendException } from '../observability'
 
 const POLL_INTERVAL_MS = 2000
 
@@ -87,6 +88,7 @@ export function ExtractionDetailPage() {
         }
       } catch (requestError) {
         if (cancelled) return
+        captureFrontendException(requestError, 'extraction_detail', { extraction_id: extractionId })
         setError(requestError instanceof Error ? requestError.message : 'Unable to load this extraction.')
         setLoading(false)
       }

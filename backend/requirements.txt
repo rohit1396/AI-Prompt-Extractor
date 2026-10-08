@@ -69,6 +69,7 @@ python-dateutil==2.9.0.post0
 PyYAML==6.0.2
 redis==8.1.0
 requests==2.34.2
+sentry-sdk==2.43.0
 ruamel.yaml==0.19.1
 safetensors==0.8.0
 setuptools==83.0.0

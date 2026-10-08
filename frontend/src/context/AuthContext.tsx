@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ensureCsrfToken, fetchCurrentUser, signInWithGoogle, signOut, type AuthUser } from '../api/auth'
+import { captureFrontendException, Sentry } from '../observability'
 
 type AuthContextValue = {
   user: AuthUser | null
@@ -26,9 +27,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCsrfToken(token)
         setUser(currentUser)
       })
-      .catch((requestError: unknown) => setError(requestError instanceof Error ? requestError.message : 'Unable to initialize authentication.'))
+      .catch((requestError: unknown) => {
+        captureFrontendException(requestError, 'authentication_initialization')
+        setError(requestError instanceof Error ? requestError.message : 'Unable to initialize authentication.')
+      })
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      Sentry.setUser({ id: String(user.id), email: user.email })
+    } else {
+      Sentry.setUser(null)
+    }
+  }, [user])
 
   const authenticate = useCallback(async (credential: string) => {
     setError(null)
@@ -36,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(await signInWithGoogle(credential, csrfToken))
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Google sign-in failed.'
+      captureFrontendException(requestError, 'authentication')
       setError(message)
       throw requestError
     }

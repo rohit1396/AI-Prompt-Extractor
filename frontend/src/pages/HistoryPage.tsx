@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Navbar } from '../components/home/Navbar'
 import { fetchExtractionHistory, type ExtractionHistoryPage, type ExtractionRecord } from '../api/extractions'
+import { captureFrontendException } from '../observability'
 
 function formatDate(value?: string) {
   if (!value) return 'Unknown time'
@@ -115,6 +116,7 @@ export function HistoryPage() {
     try {
       setHistory(await fetchExtractionHistory(page))
     } catch (requestError) {
+      captureFrontendException(requestError, 'history')
       setError(requestError instanceof Error ? requestError.message : 'Unable to load extraction history.')
     } finally {
       setLoading(false)
