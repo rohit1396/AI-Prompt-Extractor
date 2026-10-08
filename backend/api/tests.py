@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.auth.models import User
 from django.test import SimpleTestCase, override_settings
 from django.core.management import call_command
 from PIL import Image
@@ -51,9 +52,39 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         shutil.rmtree(cls._media_root, ignore_errors=True)
         super().tearDownClass()
 
+    def setUp(self):
+        self.user = User.objects.create_user(username='test-user', email='test@example.com')
+        self.client.force_authenticate(self.user)
+
+    def test_extraction_endpoints_require_authentication(self):
+        self.client.force_authenticate(user=None)
+        self.assertIn(self.client.get('/api/v1/extractions/history/').status_code, (401, 403))
+        self.assertIn(
+            self.client.post('/api/v1/extractions/', {'image': _build_image_file()}, format='multipart').status_code,
+            (401, 403),
+        )
+
+    def test_history_is_scoped_to_authenticated_user(self):
+        own = self._create_queued_extraction()
+        other = User.objects.create_user(username='other-user', email='other@example.com')
+        image = _build_image_file(filename='other.png')
+        Extraction.objects.create(
+            user=other,
+            image=image,
+            original_filename='other.png',
+            file_size=image.size,
+            content_type='image/png',
+            status=Extraction.Status.QUEUED,
+            message='Status recorded.',
+        )
+        response = self.client.get('/api/v1/extractions/history/')
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['id'], str(own.id))
+
     def _create_queued_extraction(self) -> Extraction:
         image = _build_image_file()
         return Extraction.objects.create(
+            user=self.user,
             image=image,
             original_filename='prompt.png',
             file_size=image.size,
@@ -290,6 +321,7 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         ):
             image = _build_image_file(filename=f'{index}.png')
             Extraction.objects.create(
+                user=self.user,
                 image=image,
                 original_filename=f'{index}.png',
                 file_size=image.size,
@@ -404,6 +436,10 @@ class PromptClassificationTests(SimpleTestCase):
 
 
 class PromptOptimizerTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='optimizer-user', email='optimizer@example.com')
+        self.client.force_authenticate(self.user)
+
     def test_optimizer_extracts_components_and_builds_generic_prompt(self):
         result = optimize_prompt('woman walking in Tokyo at night, neon lights, cinematic, 35mm')
 
@@ -459,6 +495,7 @@ class PromptOptimizerTests(APITestCase):
 
     def test_detail_endpoint_backfills_optimizer_for_legacy_completed_record(self):
         extraction = Extraction.objects.create(
+            user=self.user,
             image=_build_image_file(),
             original_filename='legacy.png',
             file_size=1,

@@ -7,6 +7,8 @@ import { ImageProcessingPage } from './pages/ImageProcessingPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { ResultPage } from './pages/ResultPage'
 import { ExtractionSessionProvider, useExtractionSession } from './context/ExtractionSessionContext'
+import { AuthProvider } from './context/AuthContext'
+import { AuthGate } from './components/auth/AuthGate'
 
 export function ImageProcessingEntry() {
   const navigate = useNavigate()
@@ -43,17 +45,19 @@ function LegacyHistoryResultRedirect() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ExtractionSessionProvider>
-      <BrowserRouter>
+    <AuthProvider>
+      <ExtractionSessionProvider>
+        <BrowserRouter>
         <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/imageprocessing" element={<ImageProcessingEntry />} />
-          <Route path="/imageprocessing/:extractionId" element={<ImageProcessingEntry />} />
-          <Route path="/result/:extractionId" element={<ResultPage />} />
-          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/" element={<AuthGate><App /></AuthGate>} />
+          <Route path="/imageprocessing" element={<AuthGate><ImageProcessingEntry /></AuthGate>} />
+          <Route path="/imageprocessing/:extractionId" element={<AuthGate><ImageProcessingEntry /></AuthGate>} />
+          <Route path="/result/:extractionId" element={<AuthGate><ResultPage /></AuthGate>} />
+          <Route path="/history" element={<AuthGate><HistoryPage /></AuthGate>} />
           <Route path="/history/:extractionId" element={<LegacyHistoryResultRedirect />} />
         </Routes>
-      </BrowserRouter>
-    </ExtractionSessionProvider>
+        </BrowserRouter>
+      </ExtractionSessionProvider>
+    </AuthProvider>
   </StrictMode>,
 )

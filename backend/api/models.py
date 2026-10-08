@@ -1,6 +1,18 @@
 import uuid
 
+from django.contrib.auth.models import User
 from django.db import models
+
+
+class GoogleIdentity(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='google_identity')
+    google_sub = models.CharField(max_length=255, unique=True)
+    email = models.EmailField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return self.email or self.google_sub
 
 
 class Extraction(models.Model):
@@ -21,6 +33,13 @@ class Extraction(models.Model):
         FAILED = 'failed', 'Failed'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='extractions',
+    )
     image = models.ImageField(upload_to='extractions/%Y/%m/%d/', null=True, blank=True)
     storage_provider = models.CharField(
         max_length=20,

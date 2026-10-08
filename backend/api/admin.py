@@ -1,12 +1,19 @@
 from django.contrib import admin
 
-from .models import Extraction
+from .models import Extraction, GoogleIdentity
+
+
+@admin.register(GoogleIdentity)
+class GoogleIdentityAdmin(admin.ModelAdmin):
+    list_display = ('user', 'email', 'google_sub', 'created_at', 'updated_at')
+    search_fields = ('user__username', 'user__email', 'email', 'google_sub')
 
 
 @admin.register(Extraction)
 class ExtractionAdmin(admin.ModelAdmin):
     list_display = (
         'id',
+        'user',
         'original_filename',
         'status',
         'classification_label',

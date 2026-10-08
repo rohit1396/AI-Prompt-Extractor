@@ -43,6 +43,11 @@ export type ExtractionHistoryPage = {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
+function getCsrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|; )csrftoken=([^;]*)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 async function parseExtractionResponse(response: Response): Promise<ExtractionRecord | null> {
   return (await response.json().catch(() => null)) as ExtractionRecord | null
 }
@@ -68,6 +73,10 @@ export async function uploadExtractionImage(file: File): Promise<ExtractionRecor
 
   const response = await fetch(`${API_BASE_URL}/api/v1/extractions/`, {
     method: 'POST',
+    credentials: 'include',
+    headers: {
+      'X-CSRFToken': getCsrfToken() ?? '',
+    },
     body: formData,
   })
 
@@ -84,7 +93,7 @@ export async function uploadExtractionImage(file: File): Promise<ExtractionRecor
 }
 
 export async function fetchExtraction(id: string): Promise<ExtractionRecord> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/extractions/${id}/`)
+  const response = await fetch(`${API_BASE_URL}/api/v1/extractions/${id}/`, { credentials: 'include' })
   const payload = (await parseExtractionResponse(response)) as
     | ExtractionRecord
     | { detail?: string; non_field_errors?: string[] }
@@ -99,7 +108,7 @@ export async function fetchExtraction(id: string): Promise<ExtractionRecord> {
 
 export async function fetchExtractionHistory(page = 1, pageSize = 20): Promise<ExtractionHistoryPage> {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
-  const response = await fetch(`${API_BASE_URL}/api/v1/extractions/history/?${params.toString()}`)
+  const response = await fetch(`${API_BASE_URL}/api/v1/extractions/history/?${params.toString()}`, { credentials: 'include' })
   const payload = (await response.json().catch(() => null)) as
     | ExtractionHistoryPage
     | { detail?: string; non_field_errors?: string[] }

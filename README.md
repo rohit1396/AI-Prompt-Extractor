@@ -45,6 +45,8 @@ Production:
 - `ALLOWED_HOSTS=ai-prompt-extractor.onrender.com`
 - `CORS_ALLOWED_ORIGINS=https://ai-prompt-extractor-beta.vercel.app`
 - `CSRF_TRUSTED_ORIGINS=https://ai-prompt-extractor-beta.vercel.app`
+- `GOOGLE_CLIENT_ID=your-google-web-client-id`
+- `VITE_GOOGLE_CLIENT_ID=your-google-web-client-id`
 
 Backend database:
 - `DATABASE_URL=postgresql://promptlens:promptlens@localhost:5432/promptlens`

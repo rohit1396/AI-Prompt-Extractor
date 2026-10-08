@@ -17,6 +17,10 @@ Place these values in the root `.env` file. The backend loads it automatically a
 - `CLOUDINARY_API_SECRET`
 - `CLOUDINARY_UPLOAD_FOLDER`
 - `VITE_API_BASE_URL`
+- `GOOGLE_CLIENT_ID`
+- `VITE_GOOGLE_CLIENT_ID`
+- `SESSION_COOKIE_SECURE` (`true` in production)
+- `SESSION_COOKIE_SAMESITE` (`None` when frontend and backend are on separate production sites)
 
 ## Local PostgreSQL
 
@@ -24,6 +28,8 @@ Place these values in the root `.env` file. The backend loads it automatically a
 2. Start the database and Redis services with `docker compose up -d postgres redis`.
 3. Run Django migrations from `backend/`.
 4. Start the backend, frontend, and a Celery worker against the same API URL.
+
+Configure the Google OAuth web client ID in both `GOOGLE_CLIENT_ID` and `VITE_GOOGLE_CLIENT_ID`, and add the deployed frontend origin to the OAuth client’s authorized JavaScript origins.
 
 ### Worker
 
