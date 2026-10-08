@@ -20,6 +20,8 @@ from .classification import classify_prompt_text
 from .models import Extraction
 from .ocr import OCRTextLine, _normalize_ocr_result, _select_prompt_lines
 from .optimizer import optimize_prompt
+from .observability import capture_exception
+from config.sentry import before_send
 from .tasks import process_extraction_job
 from .text_cleaning import clean_extracted_text
 
@@ -341,8 +343,13 @@ class ExtractionAsyncWorkflowTests(APITestCase):
     def test_worker_marks_extraction_failed_on_ocr_error(self):
         extraction = self._create_queued_extraction()
 
-        with patch('api.tasks.extract_prompt_text_from_path', side_effect=RuntimeError('OCR unavailable')):
-            status = process_extraction_job(str(extraction.id))
+        with patch('api.tasks.capture_exception') as mock_capture:
+            with patch('api.tasks.extract_prompt_text_from_path', side_effect=RuntimeError('OCR unavailable')):
+                status = process_extraction_job(str(extraction.id))
+
+        mock_capture.assert_called_once()
+        self.assertEqual(mock_capture.call_args.kwargs['operation'], 'extraction_processing')
+        self.assertEqual(mock_capture.call_args.kwargs['extraction'], extraction)
 
         extraction.refresh_from_db()
         self.assertEqual(status, Extraction.Status.FAILED)
@@ -350,6 +357,41 @@ class ExtractionAsyncWorkflowTests(APITestCase):
         self.assertEqual(extraction.extracted_text, '')
         self.assertIn('OCR unavailable', extraction.error_message)
         self.assertEqual(extraction.message, 'Unable to extract text from the uploaded image.')
+
+    def test_sentry_scrubber_removes_sensitive_request_data(self):
+        event = {
+            'request': {
+                'data': {'image': 'binary data', 'prompt': 'private prompt'},
+                'cookies': {'sessionid': 'secret'},
+                'headers': {'Authorization': 'secret', 'X-CSRFToken': 'secret', 'Content-Type': 'image/png'},
+            },
+            'extra': {'extracted_text': 'private OCR', 'safe_value': 'kept'},
+            'contexts': {'extraction': {'optimized_prompt': 'private prompt'}},
+        }
+
+        scrubbed = before_send(event, {})
+
+        self.assertNotIn('data', scrubbed['request'])
+        self.assertNotIn('cookies', scrubbed['request'])
+        self.assertEqual(scrubbed['request']['headers']['Authorization'], '[Filtered]')
+        self.assertEqual(scrubbed['request']['headers']['X-CSRFToken'], '[Filtered]')
+        self.assertEqual(scrubbed['request']['headers']['Content-Type'], 'image/png')
+        self.assertEqual(scrubbed['extra']['extracted_text'], '[Filtered]')
+        self.assertEqual(scrubbed['extra']['safe_value'], 'kept')
+        self.assertEqual(scrubbed['contexts']['extraction']['optimized_prompt'], '[Filtered]')
+
+    def test_capture_exception_attaches_metadata_without_text(self):
+        extraction = self._create_queued_extraction()
+
+        with patch('api.observability.sentry_sdk.capture_exception') as mock_capture:
+            capture_exception(
+                RuntimeError('OCR unavailable'),
+                operation='extraction_processing',
+                extraction=extraction,
+                context={'processing_time_ms': 123},
+            )
+
+        mock_capture.assert_called_once()
 
     def test_worker_skips_already_completed_extractions(self):
         image = _build_image_file()

@@ -12,6 +12,7 @@ from .classification import classify_prompt_text, normalize_text
 from .cloudinary import download_remote_file
 from .models import Extraction
 from .ocr import extract_prompt_text_from_path
+from .observability import capture_exception
 from .optimizer import optimize_prompt
 from .text_cleaning import clean_extracted_text
 
@@ -223,6 +224,14 @@ def process_extraction_job(extraction_id: str) -> str:
     except Exception as exc:
         processing_time_ms = int((perf_counter() - started_at) * 1000)
         error_message = str(exc) or 'OCR processing failed.'
+
+        capture_exception(
+            exc,
+            operation='extraction_processing',
+            extraction=extraction,
+            tags={'ocr_stage': 'pipeline', 'celery_task': 'api.process_extraction'},
+            context={'processing_time_ms': processing_time_ms},
+        )
 
         with transaction.atomic():
             extraction = Extraction.objects.select_for_update().get(pk=extraction_id)

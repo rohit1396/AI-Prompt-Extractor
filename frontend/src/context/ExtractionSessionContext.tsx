@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ExtractionRecord } from '../api/extractions'
 import { fetchExtraction, uploadExtractionImage } from '../api/extractions'
+import { captureFrontendException } from '../observability'
 
 export type ChecklistItem = {
   key: 'received' | 'queued' | 'processing'
@@ -159,6 +160,8 @@ export function ExtractionSessionProvider({ children }: { children: ReactNode })
         } catch (error) {
           if (activeRequestRef.current !== requestId) return
 
+          captureFrontendException(error, 'extraction_polling', { extraction_id: extractionId })
+
           clearPollTimer()
           setSession((current) =>
             current
@@ -250,6 +253,12 @@ export function ExtractionSessionProvider({ children }: { children: ReactNode })
       return response
     } catch (error) {
       if (activeRequestRef.current !== requestId) throw error
+
+      captureFrontendException(error, 'extraction_upload', {
+        file_extension: file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : '',
+        file_size: file.size,
+        content_type: file.type,
+      })
 
       clearPollTimer()
       setSession((current) =>

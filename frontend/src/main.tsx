@@ -9,6 +9,9 @@ import { ResultPage } from './pages/ResultPage'
 import { ExtractionSessionProvider, useExtractionSession } from './context/ExtractionSessionContext'
 import { AuthProvider } from './context/AuthContext'
 import { AuthGate } from './components/auth/AuthGate'
+import { initializeSentry, Sentry } from './observability'
+
+initializeSentry()
 
 export function ImageProcessingEntry() {
   const navigate = useNavigate()
@@ -45,19 +48,23 @@ function LegacyHistoryResultRedirect() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
-      <ExtractionSessionProvider>
-        <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<AuthGate><App /></AuthGate>} />
-          <Route path="/imageprocessing" element={<AuthGate><ImageProcessingEntry /></AuthGate>} />
-          <Route path="/imageprocessing/:extractionId" element={<AuthGate><ImageProcessingEntry /></AuthGate>} />
-          <Route path="/result/:extractionId" element={<AuthGate><ResultPage /></AuthGate>} />
-          <Route path="/history" element={<AuthGate><HistoryPage /></AuthGate>} />
-          <Route path="/history/:extractionId" element={<LegacyHistoryResultRedirect />} />
-        </Routes>
-        </BrowserRouter>
-      </ExtractionSessionProvider>
-    </AuthProvider>
+    <Sentry.ErrorBoundary
+      fallback={<p>Something went wrong. Please refresh and try again.</p>}
+    >
+      <AuthProvider>
+        <ExtractionSessionProvider>
+          <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<AuthGate><App /></AuthGate>} />
+            <Route path="/imageprocessing" element={<AuthGate><ImageProcessingEntry /></AuthGate>} />
+            <Route path="/imageprocessing/:extractionId" element={<AuthGate><ImageProcessingEntry /></AuthGate>} />
+            <Route path="/result/:extractionId" element={<AuthGate><ResultPage /></AuthGate>} />
+            <Route path="/history" element={<AuthGate><HistoryPage /></AuthGate>} />
+            <Route path="/history/:extractionId" element={<LegacyHistoryResultRedirect />} />
+          </Routes>
+          </BrowserRouter>
+        </ExtractionSessionProvider>
+      </AuthProvider>
+    </Sentry.ErrorBoundary>
   </StrictMode>,
 )

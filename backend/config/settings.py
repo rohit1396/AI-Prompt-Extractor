@@ -92,6 +92,10 @@ def celery_url(name: str, default: str) -> str:
 
 DEBUG = env_bool('DEBUG', False)
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+SENTRY_DSN = '' if 'test' in sys.argv[1:] else os.environ.get('SENTRY_DSN', '')
+SENTRY_ENVIRONMENT = os.environ.get('SENTRY_ENVIRONMENT', 'development')
+SENTRY_RELEASE = os.environ.get('SENTRY_RELEASE', '') or None
+SENTRY_TRACES_SAMPLE_RATE = float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0'))
 USE_CLOUDINARY_STORAGE = env_bool('USE_CLOUDINARY_STORAGE', False)
 CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
 CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '')
@@ -220,6 +224,20 @@ CSRF_TRUSTED_ORIGINS = [
         'http://localhost:5173',
     ),
 ]
+
+if SENTRY_DSN:
+    import sentry_sdk
+
+    from .sentry import before_send
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=SENTRY_ENVIRONMENT,
+        release=SENTRY_RELEASE,
+        traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+        send_default_pii=False,
+        before_send=before_send,
+    )
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', not DEBUG)

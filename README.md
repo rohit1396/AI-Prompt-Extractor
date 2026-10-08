@@ -48,6 +48,13 @@ Production:
 - `GOOGLE_CLIENT_ID=your-google-web-client-id`
 - `VITE_GOOGLE_CLIENT_ID=your-google-web-client-id`
 
+Optional monitoring:
+- `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`
+- `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT`, `VITE_SENTRY_RELEASE`
+- `SENTRY_TRACES_SAMPLE_RATE=0`
+
+Normal Django tests disable Sentry transport automatically. For manual verification, use a local or staging environment and trigger a real frontend, queueing, or worker failure without adding test-only application code.
+
 Backend database:
 - `DATABASE_URL=postgresql://promptlens:promptlens@localhost:5432/promptlens`
 - or `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
