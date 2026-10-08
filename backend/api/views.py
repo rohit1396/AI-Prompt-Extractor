@@ -1,21 +1,110 @@
 import logging
+import secrets
 
+from django.conf import settings
+from django.contrib.auth import login, logout
+from django.contrib.auth.models import User
+from django.middleware.csrf import get_token
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .cloudinary import cloudinary_is_enabled, delete_image_from_cloudinary, upload_image_to_cloudinary
-from .models import Extraction
+from .models import Extraction, GoogleIdentity
 from .optimizer import optimize_prompt
-from .serializers import ExtractionHistorySerializer, ExtractionResponseSerializer, ImageUploadSerializer
+from .serializers import ExtractionHistorySerializer, ExtractionResponseSerializer, ImageUploadSerializer, UserSerializer
 
 logger = logging.getLogger(__name__)
 
 
+def _user_payload(user: User) -> dict[str, object]:
+    return {
+        'id': user.id,
+        'email': user.email,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'display_name': user.get_full_name() or user.email or user.username,
+    }
+
+
+class CsrfTokenView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'csrfToken': get_token(request)})
+
+
+class GoogleLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from google.auth.transport import requests as google_requests
+        from google.oauth2 import id_token
+
+        credential = request.data.get('credential')
+        if not credential or not settings.GOOGLE_CLIENT_ID:
+            return Response({'detail': 'Google authentication is not configured.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        try:
+            claims = id_token.verify_oauth2_token(
+                credential,
+                google_requests.Request(),
+                settings.GOOGLE_CLIENT_ID,
+            )
+        except ValueError:
+            return Response({'detail': 'The Google sign-in credential is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        google_sub = claims.get('sub')
+        email = claims.get('email', '')
+        if not google_sub or not claims.get('email_verified') or not email:
+            return Response({'detail': 'A verified Google email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            identity = GoogleIdentity.objects.select_related('user').filter(google_sub=google_sub).first()
+            if identity:
+                user = identity.user
+            else:
+                user = User.objects.filter(email__iexact=email).first()
+                if user is None:
+                    user = User.objects.create_user(
+                        username=f'google_{secrets.token_urlsafe(16)}',
+                        email=email,
+                    )
+                identity = GoogleIdentity.objects.create(user=user, google_sub=google_sub, email=email)
+
+            user.email = email
+            user.first_name = claims.get('given_name', '')[:150]
+            user.last_name = claims.get('family_name', '')[:150]
+            user.save(update_fields=['email', 'first_name', 'last_name'])
+            identity.email = email
+            identity.save(update_fields=['email', 'updated_at'])
+
+        login(request, user)
+        return Response({'user': _user_payload(user)})
+
+
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({'user': UserSerializer(_user_payload(request.user)).data})
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        logout(request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class ExtractionUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         logger.info(
             'STEP 1: request received method=%s path=%s content_type=%s',
@@ -45,6 +134,7 @@ class ExtractionUploadView(APIView):
             with transaction.atomic():
                 extraction = Extraction.objects.create(
                     image=None if cloudinary_upload else image,
+                    user=request.user,
                     storage_provider=(
                         Extraction.StorageProvider.CLOUDINARY
                         if cloudinary_upload
@@ -112,8 +202,10 @@ class ExtractionUploadView(APIView):
 
 
 class ExtractionDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, extraction_id):
-        extraction = get_object_or_404(Extraction, pk=extraction_id)
+        extraction = get_object_or_404(Extraction, pk=extraction_id, user=request.user)
         payload = _serialize_extraction(extraction, request=request)
         response_serializer = ExtractionResponseSerializer(payload)
         return Response(response_serializer.data, status=status.HTTP_200_OK)
@@ -126,8 +218,10 @@ class ExtractionHistoryPagination(PageNumberPagination):
 
 
 class ExtractionHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
-        queryset = Extraction.objects.order_by('-created_at', '-id')
+        queryset = Extraction.objects.filter(user=request.user).order_by('-created_at', '-id')
         paginator = ExtractionHistoryPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         serializer = ExtractionHistorySerializer(

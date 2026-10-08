@@ -1,5 +1,16 @@
 # API
 
+## Authentication
+
+Authentication uses Google Identity Services and a Django session cookie.
+
+- `GET /api/v1/auth/csrf/` initializes the CSRF cookie and returns a CSRF token.
+- `POST /api/v1/auth/google/` accepts `{ "credential": "<google-id-token>" }`, verifies it with Google, and starts a session.
+- `GET /api/v1/auth/me/` returns the signed-in user.
+- `POST /api/v1/auth/logout/` ends the current session.
+
+Extraction endpoints require an authenticated session. Extraction history and detail responses are scoped to the signed-in user. Records created before authentication remain unowned.
+
 ## POST `/api/v1/extractions/`
 
 Uploads a single image, persists an extraction record, and queues OCR work.

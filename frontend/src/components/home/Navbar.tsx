@@ -12,6 +12,8 @@ function NavIcon({ className }: { className?: string }) {
 }
 
 export function Navbar() {
+  const { user, logout } = useAuth()
+
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -41,9 +43,12 @@ export function Navbar() {
           >
             History
           </NavLink>
+          <span className="hidden max-w-32 truncate px-2 text-slate-500 sm:inline" title={user?.email}>{user?.display_name}</span>
+          <button type="button" onClick={() => void logout()} className="rounded-full px-3 py-2 font-medium text-slate-500 hover:bg-slate-100">Sign out</button>
         </nav>
       </div>
     </header>
   )
 }
 import { NavLink } from 'react-router'
+import { useAuth } from '../../context/AuthContext'

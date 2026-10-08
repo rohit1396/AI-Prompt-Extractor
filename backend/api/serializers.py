@@ -3,6 +3,14 @@ from rest_framework import serializers
 from .models import Extraction
 
 
+class UserSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    email = serializers.EmailField(allow_blank=True)
+    first_name = serializers.CharField(allow_blank=True)
+    last_name = serializers.CharField(allow_blank=True)
+    display_name = serializers.CharField()
+
+
 class ImageUploadSerializer(serializers.Serializer):
     image = serializers.ImageField()
 

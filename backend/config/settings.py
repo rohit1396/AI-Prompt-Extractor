@@ -91,6 +91,7 @@ def celery_url(name: str, default: str) -> str:
 
 
 DEBUG = env_bool('DEBUG', False)
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 USE_CLOUDINARY_STORAGE = env_bool('USE_CLOUDINARY_STORAGE', False)
 CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', '')
 CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '')
@@ -211,6 +212,7 @@ CORS_ALLOWED_ORIGINS = [
         'http://localhost:5173',
     ),
 ]
+CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     *env_list(
@@ -218,6 +220,13 @@ CSRF_TRUSTED_ORIGINS = [
         'http://localhost:5173',
     ),
 ]
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', not DEBUG)
+SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Lax' if DEBUG else 'None')
+CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SAMESITE = os.environ.get('CSRF_COOKIE_SAMESITE', 'Lax' if DEBUG else 'None')
+CSRF_COOKIE_HTTPONLY = False
 
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
